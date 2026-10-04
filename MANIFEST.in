@@ -1,4 +1,5 @@
 include README.md requirements.txt requirements.dev.txt
 include botcraft/py.typed
 recursive-include botcraft/resources *.yml
+recursive-include docs *.md
 include example_plugins/echo.py
