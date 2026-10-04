@@ -1,0 +1,13 @@
+from enum import Enum
+
+
+class RuntimeState(str, Enum):
+    CREATED = 'CREATED'
+    STARTING = 'STARTING'
+    PLUGIN_LOADING = 'PLUGIN_LOADING'
+    PANEL_REBUILDING = 'PANEL_REBUILDING'
+    CONNECTING = 'CONNECTING'
+    READY = 'READY'
+    STOPPING = 'STOPPING'
+    STOPPED = 'STOPPED'
+    FAILED = 'FAILED'

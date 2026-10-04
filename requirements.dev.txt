@@ -1,0 +1,2 @@
+-r requirements.txt
+build>=1.2,<2

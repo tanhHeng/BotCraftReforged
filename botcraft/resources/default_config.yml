@@ -1,0 +1,33 @@
+# QQ bot credentials. Changing credentials or console startup settings requires restart.
+appid: ''
+secret: ''
+language: zh_cn
+plugin_directories:
+  - plugins
+# Log incoming message bodies and abbreviated user IDs to console and file.
+log_received_messages: true
+advanced_console: true
+disable_console_thread: false
+disable_console_color: false
+# Native MCDR DebugOption fields plus QQ raw-response diagnostics.
+debug:
+  all: false
+  mcdr: false
+  handler: false
+  reactor: false
+  plugin: false
+  permission: false
+  command: false
+  task_executor: false
+  telemetry: false
+  # Logs incoming Gateway payloads and HTTP bodies with credentials redacted.
+  raw_response: false
+gateway:
+  intents:
+    - GROUP_AND_C2C_EVENT
+    - INTERACTION
+http:
+  timeout: 10.0
+permission:
+  mode: mixed
+  super_admins: []

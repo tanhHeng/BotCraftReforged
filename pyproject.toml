@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "botcraft"
+dynamic = ["version", "dependencies"]
+description = "Independent QQ bot framework using native MCDReforged plugin and command primitives"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Typing :: Typed",
+]
+
+[project.scripts]
+botcraft = "botcraft.entrypoint:entrypoint"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.dynamic]
+version = {attr = "botcraft.constants.core_constant.VERSION"}
+dependencies = {file = ["requirements.txt"]}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["botcraft", "botcraft.*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+botcraft = ["py.typed", "resources/*.yml", "resources/lang/*.yml"]

@@ -1,0 +1,24 @@
+botcraft:
+  permission:
+    denied: '仅超级管理员或本库控制台可管理权限。'
+    unknown_user: '未找到已知的 C2C 用户；不能推断真实身份或私聊路由。'
+    set: '已将 {0} 的权限设为 {1}。'
+    remove: '已撤销 {0} 的显式权限。'
+    query: '{0} 的有效权限为 {1}。'
+    query_global: '{0} 的全局显式权限为 {1}。'
+    ambiguity: '一次只能指定一个目标用户，不能同时使用提及和 OpenID。'
+    scope_conflict: '群聊、C2C 和全局作用域互斥。'
+  preference:
+    language: '当前语言：{0}'
+    set: '语言偏好已设为 {0}。'
+    reset: '语言偏好已重置为当前默认语言 {0}。'
+    invalid_language: '不支持的语言：{0}'
+  reload:
+    config: '配置已重新加载。'
+    permission: '权限已重新加载。'
+    preference: '偏好已重新加载。'
+    failed: '重新加载失败，原有效配置未改变。'
+  help:
+    description: '查询帮助'
+    title: 'BotCraft 指令帮助'
+    empty: '没有可用的指令帮助。'

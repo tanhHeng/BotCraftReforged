@@ -1,0 +1,11 @@
+# Native level lists contain encoded QQ scoped identities, never inferred identities.
+# group:<encoded conversation>:<encoded actual User.id>
+# c2c:<encoded user_openid>:<encoded actual User.id>
+# global:<encoded actual User.id>
+# QQ users absent from all lists resolve through the selected policy, not default_level.
+default_level: guest
+owner:
+admin:
+helper:
+user:
+guest:

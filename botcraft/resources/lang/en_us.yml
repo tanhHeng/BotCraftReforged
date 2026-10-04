@@ -1,0 +1,24 @@
+botcraft:
+  permission:
+    denied: 'Only a configured super administrator or the BotCraft console may manage permissions.'
+    unknown_user: 'Unknown C2C user; real identity and private conversation cannot be inferred.'
+    set: 'Set permission for {0} to {1}.'
+    remove: 'Removed explicit permission for {0}.'
+    query: 'Effective permission for {0}: {1}.'
+    query_global: 'Explicit global permission for {0}: {1}.'
+    ambiguity: 'Specify exactly one user; mentions and an OpenID cannot be combined.'
+    scope_conflict: 'Group, C2C and global scopes are mutually exclusive.'
+  preference:
+    language: 'Current language: {0}'
+    set: 'Language preference set to {0}.'
+    reset: 'Language preference reset to the current default {0}.'
+    invalid_language: 'Unsupported language: {0}'
+  reload:
+    config: 'Configuration reloaded.'
+    permission: 'Permissions reloaded.'
+    preference: 'Preferences reloaded.'
+    failed: 'Reload failed; the previous effective configuration is unchanged.'
+  help:
+    description: 'Show help'
+    title: 'BotCraft command help'
+    empty: 'No command help is available.'
