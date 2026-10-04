@@ -1,0 +1,30 @@
+# Python and packaging
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+.coverage
+htmlcov/
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local credentials, plugins and runtime state
+/config.yml
+/permissions.yml
+/config/
+/logs/
+/plugins/
+/test/
+/tests/
+
+# Local design references and protocol snapshots
+/reference/
