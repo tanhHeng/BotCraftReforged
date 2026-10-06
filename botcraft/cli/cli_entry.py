@@ -6,12 +6,17 @@ from botcraft.runtime_args import RuntimeArgs
 
 
 def cli_dispatch(argv: Optional[Sequence[str]] = None) -> int:
+    """Parse and dispatch a standalone BotCraft deployment, packaging or runtime command.
+    
+    :param argv: Command-line arguments, or the process arguments when omitted.
+    :return: Zero after successful command dispatch; parser and command failures raise.
+    """
     parser = ArgumentParser(prog='botcraft', description='BotCraft QQ bot framework',
                             formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument('-V', '--version', action='store_true', help='Print version and exit')
     subparsers = parser.add_subparsers(dest='command', title='Commands')
 
-    def config_paths(subparser):
+    def config_paths(subparser: ArgumentParser) -> None:
         subparser.add_argument('--config', default='config.yml', metavar='CONFIG_FILE',
                                help='Path to the BotCraft configuration file')
         subparser.add_argument('--permission', default='permissions.yml', metavar='PERMISSION_FILE',

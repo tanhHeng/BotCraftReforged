@@ -4,6 +4,23 @@
 
 插件从 `botcraft.api` 导入公开接口。使用 MCDR 的命令节点、插件元数据和生命周期，但消息来源是 QQ，消息内容是 `str`、`QText`、`QMarkdown` 或延迟翻译文本。不要通过框架私有字段访问内部服务。
 
+`example_plugins/` 是面向开发者的示例：保留类型声明、模块来源/许可说明及必要的英文解释性注释，不为示例函数编写 API 式参数/返回值 docstring；库的公共 API 方法则提供完整方法说明。
+
+库的 API docstring 使用英文 Sphinx/reStructuredText 字段语法：首段描述行为，`:param name:` 说明参数，`:return:` 说明返回结果，明确的异常条件使用 `:raises ExceptionType:`。类型以函数签名的声明为准，不重复维护 `:type:` 或 `:rtype:`。无输入参数时不写空参数区块，不返回结果的拒绝操作只记录异常条件；示例插件仍以解释性注释为主。
+
+```python
+from botcraft.message.qtext.text import escape_markdown as _escape_markdown
+
+def escape_markdown(text: str) -> str:
+    """Escape literal text for a QQ Markdown message.
+
+    :param text: Literal text to escape.
+    :return: Text with HTML and Markdown characters escaped.
+    :raises TypeError: The input is not a string.
+    """
+    return _escape_markdown(text)
+```
+
 ## 第一个命令插件
 
 保存为实例的 `plugins/echo.py`，启动后在群聊或 C2C 发送 `/echo Hello world`：

@@ -1,4 +1,11 @@
 """Native regular-plugin state machine with QQ callbacks and logging."""
+from __future__ import annotations
+from typing import TYPE_CHECKING
+from typing_extensions import Self
+
+if TYPE_CHECKING:
+    from botcraft.plugin.plugin_manager import PluginManager
+from mcdreforged.plugin.plugin_event import PluginEvent
 import re
 from pathlib import Path
 from mcdreforged.plugin.type.regular_plugin import RegularPlugin as NativeRegularPlugin
@@ -11,7 +18,13 @@ from .plugin import Plugin
 
 
 class RegularPlugin(Plugin, NativeRegularPlugin):
-    def __init__(self, plugin_manager, file_path):
+    def __init__(self: Self, plugin_manager: PluginManager, file_path: str | Path) -> None:
+        """Initialize a regular plugin record without changing the native state machine.
+        
+        :param plugin_manager: Manager owning the record.
+        :param file_path: Plugin file or directory to load.
+        :return: No value is returned.
+        """
         Plugin.__init__(self, plugin_manager)
         self.file_path = Path(file_path)
         self.file_name = self.file_path.name
@@ -25,16 +38,16 @@ class RegularPlugin(Plugin, NativeRegularPlugin):
     reload = bind_native(NativeRegularPlugin.reload, runtime=True)
     _native_unload = bind_native(NativeRegularPlugin._on_unload, runtime=True)
 
-    def _reset(self):
+    def _reset(self: Self) -> None:
         NativeRegularPlugin._reset(self)
         self.decorated_event_listeners.clear()
 
-    def _on_unload(self):
+    def _on_unload(self: Self) -> None:
         self._native_unload()
         self.decorated_event_listeners.clear()
         self.plugin_registry.clear()
 
-    def _register_default_listeners(self):
+    def _register_default_listeners(self: Self) -> None:
         for event in PluginEvents.get_event_list():
             callback = getattr(self.entry_module_instance, event.default_method_name, None)
             if callable(callback):
@@ -49,7 +62,13 @@ class RegularPlugin(Plugin, NativeRegularPlugin):
             self.register_event_listener(event, listener)
         self.decorated_event_listeners.clear()
 
-    def register_event_listener(self, event, listener):
+    def register_event_listener(self: Self, event: PluginEvent | str, listener: EventListener) -> None:
+        """Queue import-time listeners or register them on a loaded plugin.
+        
+        :param event: Event object or identifier.
+        :param listener: Listener associated with this plugin.
+        :return: No value is returned.
+        """
         if self.in_states({PluginState.LOADING}):
             self.decorated_event_listeners.append((event, listener))
         else:

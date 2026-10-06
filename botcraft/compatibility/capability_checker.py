@@ -1,4 +1,5 @@
 """Version-keyed checks of the installed BotCraft runtime, never user plugins."""
+from botcraft.logging.logger import Logger
 import json
 import os
 from importlib.metadata import version
@@ -20,12 +21,14 @@ class CapabilityCheckError(RuntimeError):
     """The installed runtime cannot provide a required local capability."""
 
 
-def check_capabilities(logger, force=False):
-    """Run packaged probes in a clean subprocess, or reuse matching versions.
-
-    Only BotCraft and MCDR versions key this cache. Python versions and source
-    timestamps deliberately do not participate. A successful child report is
-    emitted only after its runtime and temporary resources have been cleaned.
+def check_capabilities(logger: Logger, force: bool = False) -> None:
+    """Run packaged probes in an isolated subprocess or reuse matching versions.
+    
+    Only successful, fully cleaned reports are cached by BotCraft and MCDR versions.
+    
+    :param logger: Runtime logger receiving subprocess diagnostics.
+    :param force: Ignore the version cache and run the probes again.
+    :return: No value is returned.
     """
     versions = {'botcraft': VERSION, 'mcdr': version('mcdreforged')}
     cache_path = _CACHE_PATH.absolute()

@@ -1,5 +1,16 @@
 """QQ adapter for MCDR's plugin manager, retaining its dependency/batch algorithms."""
 from __future__ import annotations
+from typing import Any, Callable, TYPE_CHECKING, TypeVar
+from types import FunctionType
+from typing_extensions import Self, TypedDict, Unpack
+from mcdreforged.plugin.plugin_event import PluginEvent, EventListener
+
+if TYPE_CHECKING:
+    from botcraft.runtime import Runtime
+
+_OperationValue = TypeVar("_OperationValue")
+
+
 import functools
 import queue
 import threading
@@ -19,13 +30,21 @@ from . import plugin_factory
 from .plugin_event import PluginEvents, normalize_event_id
 from .plugin_registry import PluginRegistryStorage
 from ._native import bind_native
+class _ManipulationOptions(TypedDict, total=False):
+    load: list[Path] | None
+    unload: list[RegularPlugin] | None
+    reload: list[RegularPlugin] | None
+    enable: list[Path] | None
+    disable: list[RegularPlugin] | None
+    try_load_indirect_unloaded: bool
+    entered_callback: Callable[[], Any] | None
 
 
 class DependencyWalker(NativeDependencyWalker):
     __init__ = bind_native(NativeDependencyWalker.__init__, runtime=True)
 
 
-def _native_method(name):
+def _native_method(name: str) -> FunctionType:
     return bind_native(getattr(NativePluginManager, name), globals={
         'plugin_factory': plugin_factory,
         'MCDRPluginEvents': PluginEvents,
@@ -34,7 +53,12 @@ def _native_method(name):
 
 
 class PluginManager(NativePluginManager):
-    def __init__(self, runtime):
+    def __init__(self: Self, runtime: Runtime) -> None:
+        """Initialize native plugin collections and BotCraft operation scheduling.
+        
+        :param runtime: Runtime providing executors, configuration and logging.
+        :return: No value is returned.
+        """
         self.runtime = runtime
         self.logger = runtime.logger
         self.plugin_directories = []
@@ -57,10 +81,15 @@ class PluginManager(NativePluginManager):
     _PluginManager__finalize_plugin_manipulation = _native_method('_PluginManager__finalize_plugin_manipulation')
     _native_manipulate_plugins = _native_method('manipulate_plugins')
 
-    def manipulate_plugins(self, **kwargs):
+    def manipulate_plugins(self: Self, **kwargs: Unpack[_ManipulationOptions]) -> Future[PluginOperationResult]:
+        """Run a native batch of plugin state transitions.
+        
+        :param kwargs: Native load, unload, reload, enable and disable lists, indirect-loading flag and entry callback.
+        :return: Future completed with the native batch operation result.
+        """
         return observe_future(self._native_manipulate_plugins(**kwargs), self.logger, 'plugin operation')
 
-    def _PluginManager__load_plugin(self, file_path):
+    def _PluginManager__load_plugin(self: Self, file_path: Path) -> RegularPlugin | None:
         plugin = plugin_factory.create_regular_plugin(self, file_path)
         try:
             plugin.load()
@@ -84,7 +113,7 @@ class PluginManager(NativePluginManager):
         self.logger.info('Loaded plugin %s', plugin)
         return plugin
 
-    def _PluginManager__update_registry(self):
+    def _PluginManager__update_registry(self: Self) -> None:
         self.registry_storage.clear()
         for plugin in self.get_all_plugins():
             self.registry_storage.collect(plugin, plugin.plugin_registry)
@@ -95,7 +124,11 @@ class PluginManager(NativePluginManager):
                 self.registry_storage.export_commands(exporter)
         self.runtime.on_registry_changed()
 
-    def register_builtin_plugins(self):
+    def register_builtin_plugins(self: Self) -> None:
+        """Load and register the BotCraft and Python built-in plugins.
+        
+        :return: No value is returned.
+        """
         from .type.builtin_plugin import CorePlugin, PythonPlugin
         for plugin in (CorePlugin(self), PythonPlugin(self)):
             self._PluginManager__add_plugin(plugin)
@@ -106,28 +139,45 @@ class PluginManager(NativePluginManager):
         self._PluginManager__sort_plugins_by_id()
         self._PluginManager__update_registry()
 
-    def load_all_plugins(self):
+    def load_all_plugins(self: Self) -> Future[PluginOperationResult]:
+        """Refresh all enabled plugins using native dependency ordering.
+        
+        :return: Future completed with the refresh operation result.
+        """
         return self.refresh_all_plugins()
 
-    def _track_operation(self, future):
+    def _track_operation(self: Self, future: Future[_OperationValue]) -> Future[_OperationValue]:
         with self._operation_lock:
             self._operation_futures.add(future)
-        def discard(done):
+        def discard(done: Future[_OperationValue]) -> None:
+            """Remove a completed operation from shutdown tracking.
+            
+            :param done: Future whose operation has completed.
+            :return: No value is returned.
+            """
             with self._operation_lock:
                 self._operation_futures.discard(done)
         future.add_done_callback(discard)
         return observe_future(future, self.logger, 'plugin operation')
 
-    def _PluginManager__run_manipulation(self, action, *, wait_if_async=True):
-        # Native single-flight serial operation queue with cancellation-safe completion.
+    def _PluginManager__run_manipulation(self: Self, action: Callable[[], PluginOperationResult], *, wait_if_async: bool = True) -> Future[PluginOperationResult]:
         if self.runtime.async_task_executor.is_on_thread():
             raise RuntimeError('Plugin manipulation is not allowed on the async executor')
         executor = self.runtime.sync_task_executor
         if not executor.is_on_thread():
             result_future = self._track_operation(Future())
-            def func():
+            def func() -> None:
+                """Schedule a plugin operation on the synchronous executor.
+                
+                :return: No value is returned.
+                """
                 inner = self._PluginManager__run_manipulation(action)
-                def done(future):
+                def done(future: Future[PluginOperationResult]) -> None:
+                    """Complete the caller-facing future from a plugin operation.
+                    
+                    :param future: Completed inner plugin operation.
+                    :return: No value is returned.
+                    """
                     if future.cancelled():
                         result_future.cancel()
                     else:
@@ -135,7 +185,12 @@ class PluginManager(NativePluginManager):
                         complete_future(result_future, self.logger, 'plugin operation', error=error, result=None if error else future.result())
                 inner.add_done_callback(done)
             scheduled = executor.submit(func)
-            def submission_done(future):
+            def submission_done(future: Future[None]) -> None:
+                """Propagate scheduling cancellation and errors to the operation.
+                
+                :param future: Completed synchronous executor submission.
+                :return: No value is returned.
+                """
                 if future.cancelled():
                     result_future.cancel()
                 elif future.exception() is not None:
@@ -165,7 +220,12 @@ class PluginManager(NativePluginManager):
                     self._PluginManager__mani_thread = None
             return future
 
-    def finish_pending(self, error=None):
+    def finish_pending(self: Self, error: BaseException | None = None) -> None:
+        """Cancel or fail outstanding plugin operations during shutdown.
+        
+        :param error: Failure to assign to pending operations, or None to cancel them.
+        :return: No value is returned.
+        """
         with self._operation_lock:
             pending = tuple(self._operation_futures)
         for future in pending:
@@ -175,7 +235,16 @@ class PluginManager(NativePluginManager):
                 else:
                     complete_future(future, self.logger, 'plugin shutdown', error=error)
 
-    def dispatch_event(self, event, args, *, dispatch_policy=NativePluginManager.DispatchEventPolicy.always_new_task, block=False, exclude_legacy=False):
+    def dispatch_event(self: Self, event: PluginEvent | str, args: tuple[Any, ...], *, dispatch_policy: NativePluginManager.DispatchEventPolicy = NativePluginManager.DispatchEventPolicy.always_new_task, block: bool = False, exclude_legacy: bool = False) -> None:
+        """Dispatch plugin listeners with native ordering and executor policy.
+        
+        :param event: Event object or canonicalizable identifier.
+        :param args: Open positional arguments supplied to plugin callbacks.
+        :param dispatch_policy: Native executor scheduling policy.
+        :param block: Wait for all dispatched listeners to finish.
+        :param exclude_legacy: Skip listeners already delivered through a legacy callback path.
+        :return: No value is returned.
+        """
         executor = self.runtime.sync_task_executor
         on_thread = executor.is_on_thread()
         submit = dispatch_policy == self.DispatchEventPolicy.always_new_task or dispatch_policy == self.DispatchEventPolicy.ensure_on_thread and not on_thread
@@ -196,8 +265,13 @@ class PluginManager(NativePluginManager):
             for future in direct:
                 future.result()
 
-    def trigger_listener(self, listener, args):
-        # Unloaded queued callbacks must not run; already-running callbacks finish normally.
+    def trigger_listener(self: Self, listener: EventListener, args: tuple[Any, ...]) -> Future[None]:
+        """Invoke a ready plugin listener in its owning plugin context.
+        
+        :param listener: Native listener containing its plugin and callback.
+        :param args: Open positional arguments supplied to the plugin callback.
+        :return: Future completed after invocation, skipped invocation, or callback failure.
+        """
         if not listener.plugin.in_states({PluginState.READY}):
             future = Future()
             future.set_result(None)
@@ -215,7 +289,7 @@ class PluginManager(NativePluginManager):
             complete_future(future, self.logger, 'plugin listener', result=None)
         return future
 
-    async def _trigger_listener_async(self, listener, args):
+    async def _trigger_listener_async(self: Self, listener: EventListener, args: tuple[Any, ...]) -> None:
         if not listener.plugin.in_states({PluginState.READY}):
             return
         with self.with_plugin_context(listener.plugin):

@@ -1,4 +1,11 @@
 """Internal typed QQ OpenAPI client. No generic public request escape hatch."""
+from __future__ import annotations
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
+from typing_extensions import Self
+
+if TYPE_CHECKING:
+    from botcraft.runtime import Runtime
+    from botcraft.message.user import Scene
 import asyncio
 from collections import deque
 import json as json_module
@@ -31,7 +38,7 @@ _INVALID = {11251, 11261, 11262, 11275, 12002, 22006, 304061, 304062, 304080,
             40054007, 40054010, 40054018, 40061001, 40061002, 40064004}
 
 
-def _category(status, code, credential):
+def _category(status: int, code: int | None, credential: bool) -> ErrorCategory:
     if credential:
         if code == 100001:
             return ErrorCategory.RATE_LIMIT
@@ -50,13 +57,13 @@ def _category(status, code, credential):
     return ErrorCategory.PLATFORM
 
 
-def _id(value, name):
+def _id(value: str, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f'{name} must be a non-empty string')
     return quote(value, safe='')
 
 
-def _scene(scene):
+def _scene(scene: str | Scene) -> str:
     scene = getattr(scene, 'value', scene)
     if scene not in ('group', 'c2c'):
         raise ValueError('Only group and c2c are supported')
@@ -66,7 +73,12 @@ def _scene(scene):
 class ApiClient:
     BASE_URL = 'https://api.bot.qq.com'
 
-    def __init__(self, runtime):
+    def __init__(self: Self, runtime: Runtime) -> None:
+        """Create the internal QQ HTTP client and shared access-token provider.
+        
+        :param runtime: Runtime supplying configuration and protocol logging.
+        :return: No return value.
+        """
         self.runtime = runtime
         self._session = None
         self._closed = False
@@ -77,12 +89,16 @@ class ApiClient:
         self._panel_write_lock = asyncio.Lock()
         self._panel_query_lock = asyncio.Lock()
 
-    async def start(self):
+    async def start(self: Self) -> None:
+        """Open the HTTP session and acquire an initial access token.
+        
+        :return: No return value.
+        """
         if self._session is not None or self._closed:
             raise RuntimeError('ApiClient may be started only once')
         trace = aiohttp.TraceConfig()
 
-        async def headers_sent(session, context, params):
+        async def headers_sent(session: aiohttp.ClientSession, context: SimpleNamespace, params: aiohttp.TraceRequestHeadersSentParams) -> None:
             if context.trace_request_ctx is not None:
                 context.trace_request_ctx.sent = True
 
@@ -90,14 +106,18 @@ class ApiClient:
         self._session = aiohttp.ClientSession(trace_configs=[trace])
         await self.token_provider.get_token()
 
-    async def close(self):
+    async def close(self: Self) -> None:
+        """Close token-refresh work and the HTTP session.
+        
+        :return: No return value.
+        """
         self._closed = True
         await self.token_provider.close()
         if self._session is not None:
             await self._session.close()
 
-    async def _request(self, method, path, *, json=None, params=None, credential=False,
-                       operation, allow_empty=False, required=(), validate=None):
+    async def _request(self: Self, method: str, path: str, *, json: Mapping[str, Any] | None = None, params: Mapping[str, str | int | float] | None = None, credential: bool = False,
+                       operation: str, allow_empty: bool = False, required: Sequence[str] = (), validate: Callable[[dict[str, Any]], str | None] | None = None) -> dict[str, Any]:
         if self._session is None or self._closed:
             raise RuntimeError('ApiClient is not open')
         token = None if credential else await self.token_provider.get_token()
@@ -180,35 +200,63 @@ class ApiClient:
             reason = sanitize(f'{operation}: {type(error).__name__}', secrets)
             raise cls(reason, http_code=status, trace_id=trace_id) from None
 
-    async def get_gateway(self):
+    async def get_gateway(self: Self) -> str:
+        """Discover the QQ websocket gateway URL.
+        
+        :return: Gateway websocket URL reported by QQ.
+        """
         data = await self._request('GET', '/gateway', operation='gateway discovery', required=('url',))
         return data['url']
 
-    async def send_message(self, scene, conversation, payload):
+    async def send_message(self: Self, scene: str | Scene, conversation: str, payload: Mapping[str, Any]) -> dict[str, Any]:
+        """Send a message to a supported QQ conversation without automatic replay.
+        
+        :param scene: Supported group or c2c conversation scene.
+        :param conversation: Platform conversation OpenID.
+        :param payload: Open QQ message protocol fields.
+        :return: Validated platform response containing the sent message identifier.
+        """
         kind = 'groups' if _scene(scene) == 'group' else 'users'
         return await self._request('POST', f'/v2/{kind}/{_id(conversation, "conversation")}/messages',
                                    json=payload, operation='send message', required=('id',))
 
-    async def delete_message(self, scene, conversation, id):
+    async def delete_message(self: Self, scene: str | Scene, conversation: str, id: str) -> None:
+        """Delete a QQ conversation message by its platform identifier.
+        
+        :param scene: Supported group or c2c conversation scene.
+        :param conversation: Platform conversation OpenID.
+        :param id: Platform message or interaction identifier.
+        :return: No return value.
+        """
         kind = 'groups' if _scene(scene) == 'group' else 'users'
         await self._request('DELETE', f'/v2/{kind}/{_id(conversation, "conversation")}/messages/{_id(id, "message id")}',
                             operation='delete message', allow_empty=True)
 
-    async def respond_interaction(self, id, code):
+    async def respond_interaction(self: Self, id: str, code: int) -> None:
+        """Submit a platform interaction response code.
+        
+        :param id: Platform message or interaction identifier.
+        :param code: QQ interaction response code.
+        :return: No return value.
+        """
         await self._request('PUT', f'/interactions/{_id(id, "interaction id")}', json={'code': code},
                             operation='respond interaction', allow_empty=True)
 
     @staticmethod
-    def _delay(history, limit):
+    def _delay(history: deque[float], limit: int) -> float:
         now = time.monotonic()
         while history and history[0] <= now - 60:
             history.popleft()
         return max(0, history[0] + 60 - now) if len(history) >= limit else 0
 
-    def panel_write_delay(self):
+    def panel_write_delay(self: Self) -> float:
+        """Return the current wait before the next panel write slot.
+        
+        :return: Seconds remaining until the next write slot is available.
+        """
         return self._delay(self._panel_writes, 10)
 
-    async def _panel_slot(self, write):
+    async def _panel_slot(self: Self, write: bool) -> None:
         lock = self._panel_write_lock if write else self._panel_query_lock
         history = self._panel_writes if write else self._panel_queries
         limit = 10 if write else 30
@@ -219,7 +267,7 @@ class ApiClient:
             history.append(time.monotonic())  # Failures consume exactly the same slot.
 
     @staticmethod
-    def _validate_panel_page(data, scope):
+    def _validate_panel_page(data: dict[str, Any], scope: str) -> str | None:
         if not isinstance(data.get('records'), list):
             return 'invalid panel records'
         for record in data['records']:
@@ -231,12 +279,17 @@ class ApiClient:
             return 'invalid panel pagination metadata'
 
     @staticmethod
-    def _validate_panel_version(data):
+    def _validate_panel_version(data: dict[str, Any]) -> str | None:
         version = data.get('version')
         if isinstance(version, bool) or not isinstance(version, int) or version < 0:
             return 'invalid panel version response'
 
-    async def list_panels(self, scope):
+    async def list_panels(self: Self, scope: str | Scene) -> list[dict[str, Any]]:
+        """List all panels in a supported scope using validated cursor pagination.
+        
+        :param scope: Supported group or c2c panel scope.
+        :return: Validated panel records across all pages.
+        """
         scope = _scene(scope)
         records = []
         cursor = ''
@@ -258,20 +311,37 @@ class ApiClient:
             seen.add(next_cursor)
             cursor = next_cursor
 
-    async def create_panel(self, scope, items):
+    async def create_panel(self: Self, scope: str, items: Sequence[dict[str, Any]]) -> dict[str, Any]:
+        """Create a scoped panel containing the supplied protocol items.
+        
+        :param scope: Supported group or c2c panel scope.
+        :param items: Panel item protocol mappings.
+        :return: Result of the operation.
+        """
         await self._panel_slot(True)
         return await self._request('POST', '/v2/panels',
                                    json={'scope': _scene(scope), 'target_type': 'all',
                                          'panel': {'items': items, 'remark': 'BotCraft'}},
                                    operation='create ' + scope + ' panel', required=('panel_id',))
 
-    async def modify_panel(self, panel_id, items):
+    async def modify_panel(self: Self, panel_id: str, items: Sequence[dict[str, Any]]) -> dict[str, Any]:
+        """Replace the items of an existing QQ panel.
+        
+        :param panel_id: QQ panel identifier.
+        :param items: Panel item protocol mappings.
+        :return: Result of the operation.
+        """
         await self._panel_slot(True)
         return await self._request('PUT', '/v2/panels/' + _id(panel_id, 'panel id'),
                                    json={'panel': {'items': items, 'remark': 'BotCraft'}},
                                    operation='modify panel', validate=self._validate_panel_version)
 
-    async def delete_panel(self, panel_id):
+    async def delete_panel(self: Self, panel_id: str) -> None:
+        """Delete an existing QQ panel.
+        
+        :param panel_id: QQ panel identifier.
+        :return: No return value.
+        """
         await self._panel_slot(True)
         await self._request('DELETE', '/v2/panels/' + _id(panel_id, 'panel id'),
                             operation='delete panel', allow_empty=True)

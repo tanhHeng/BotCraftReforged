@@ -1,4 +1,17 @@
 """Standalone QQ runtime using reusable MCDR code without an MCDR host."""
+from __future__ import annotations
+from concurrent.futures import Future
+from typing import TYPE_CHECKING, Callable, Protocol
+from typing_extensions import Self
+
+if TYPE_CHECKING:
+    from botcraft.config import Config
+    from botcraft.logging.logger import Logger
+    from botcraft.message.qtext.text import QText, QMarkdown
+    from botcraft.plugin.si.server_interface import QQServerInterface
+    from botcraft.translation.translation_manager import TranslationParameter, TranslationOption
+
+
 import asyncio
 import logging
 import threading
@@ -10,8 +23,26 @@ from botcraft.logging.logger import create_logger
 from botcraft.utils.future_utils import observe_future, report_error
 
 
+class _InternalTranslator(Protocol):
+    def tr(self: Self, key: str, *args: object, **kwargs: object) -> str | QText | QMarkdown:
+        """Translate a native manager key using adapted scalar values.
+        
+        :param key: Translation key beneath the native manager namespace.
+        :param args: Positional values adapted to scalar text when necessary.
+        :param kwargs: Named formatting values adapted to scalar text when necessary.
+        :return: Immediately evaluated translation with QQ text formatting preserved.
+        """
+        ...
+
+
 class Runtime:
-    def __init__(self, args=None, logger=None):
+    def __init__(self: Self, args: RuntimeArgs | None = None, logger: Logger | None = None) -> None:
+        """Create a fresh runtime with optional deployment arguments and logger.
+        
+        :param args: Deployment action and selected configuration paths, or defaults when omitted.
+        :param logger: Standalone logger, or a newly created default logger.
+        :return: No return value.
+        """
         self.args = args or RuntimeArgs()
         self.logger = logger or create_logger()
         self.state = RuntimeState.CREATED
@@ -25,58 +56,107 @@ class Runtime:
         self._callbacks_ready = False
         self.builtin_command_root = None
 
-    def get_config(self):
+    def get_config(self: Self) -> Config:
+        """Return the active standalone configuration.
+        
+        :return: Result of the operation.
+        """
         return self.config_manager.get_config()
 
     @property
-    def config(self):
+    def config(self: Self) -> Config:
+        """Expose the active standalone configuration.
+        
+        :return: Result of the operation.
+        """
         return self.get_config()
 
-    def get_language(self):
+    def get_language(self: Self) -> str:
+        """Return the configured translation language.
+        
+        :return: Result of the operation.
+        """
         return self.translation_manager.language
 
-    def get_server_interface(self):
+    def get_server_interface(self: Self) -> QQServerInterface:
+        """Return the plugin-facing QQ server interface.
+        
+        :return: Result of the operation.
+        """
         return self.server_interface
 
-    def add_config_changed_callback(self, callback):
+    def add_config_changed_callback(self: Self, callback: Callable[[Config, bool], None]) -> None:
+        """Register a configuration callback and invoke it immediately once callbacks are ready.
+        
+        :param callback: Callback receiving the active configuration and logging flag.
+        :return: No return value.
+        """
         self._config_callbacks.append(callback)
         if self._callbacks_ready:
             callback(self.config, False)
 
-    def create_internal_translator(self, prefix):
+    def create_internal_translator(self: Self, prefix: str) -> _InternalTranslator:
+        """Create a native-key translator that converts nonscalar formatting values to text.
+        
+        :param prefix: Native manager translation namespace beneath mcdreforged.
+        :return: Result of the operation.
+        """
         class Translator:
-            def __init__(inner, runtime):
+            def __init__(inner: Self, runtime: Runtime) -> None:
                 inner.runtime = runtime
 
-            def tr(inner, key, *args, **kwargs):
+            def tr(inner: Self, key: str, *args: object, **kwargs: object) -> str | QText | QMarkdown:
                 scalar = (str, int, float, bool, type(None))
-                def adapt(value):
+                def adapt(value: object) -> str | int | float | bool | None:
                     return value if isinstance(value, scalar) else str(value)
                 args = tuple(adapt(value) for value in args)
                 kwargs = {name: adapt(value) for name, value in kwargs.items()}
                 return inner.runtime.translate('mcdreforged.' + prefix + '.' + key, *args, **kwargs)
         return Translator(self)
 
-    def translate(self, key, *args, **kwargs):
+    def translate(self: Self, key: str, *args: TranslationParameter, **kwargs: TranslationOption) -> str | QText | QMarkdown:
+        """Translate a key immediately, honoring native language and failure option aliases.
+        
+        :param key: Translation key.
+        :param args: Positional translation formatting values.
+        :param kwargs: Named formatting values and supported translation options.
+        :return: Result of the operation.
+        """
         if '_mcdr_tr_language' in kwargs:
             kwargs['language'] = kwargs.pop('_mcdr_tr_language')
         if '_mcdr_tr_allow_failure' in kwargs:
             kwargs['allow_failure'] = kwargs.pop('_mcdr_tr_allow_failure')
         return self.translation_manager.tr(key, *args, **kwargs)
 
-    def is_stopping(self):
+    def is_stopping(self: Self) -> bool:
+        """Report whether shutdown has started or the runtime has failed.
+        
+        :return: Result of the operation.
+        """
         return self.state in (RuntimeState.STOPPING, RuntimeState.STOPPED, RuntimeState.FAILED)
 
-    def is_ready(self):
+    def is_ready(self: Self) -> bool:
+        """Report whether the runtime and QQ gateway are both ready.
+        
+        :return: Result of the operation.
+        """
         return self.state is RuntimeState.READY and self.gateway.is_ready()
 
-    def exit(self):
+    def exit(self: Self) -> bool:
+        """Request orderly shutdown without waiting for executor threads.
+        
+        :return: True when shutdown was requested; False after a terminal state.
+        """
         if self.state in (RuntimeState.STOPPED, RuntimeState.FAILED):
             return False
         self._exit_requested.set()
         return True
 
-    def initialize_local(self):
+    def initialize_local(self: Self) -> None:
+        """Initialize local managers and services without starting network connections.
+        
+        :return: No return value.
+        """
         if self._initialized:
             return
         from botcraft.config import ConfigManager
@@ -123,7 +203,12 @@ class Runtime:
         self._callbacks_ready = True
         self.on_config_changed(log=False)
 
-    def on_config_changed(self, *, log=False):
+    def on_config_changed(self: Self, *, log: bool = False) -> None:
+        """Apply active configuration to local services and schedule network updates.
+        
+        :param log: Whether configuration callbacks should log applied settings.
+        :return: No return value.
+        """
         self.logger.setLevel(logging.DEBUG if self.config.is_debug_on() else logging.INFO)
         self.logger.set_debug_options(self.config.debug)
         self.logger.set_console_color(not self.config.disable_console_color)
@@ -134,19 +219,32 @@ class Runtime:
             self.network_loop.submit(self._apply_network_config(), operation='configuration apply')
         self.on_registry_changed()
 
-    async def _apply_network_config(self):
+    async def _apply_network_config(self: Self) -> None:
         await self.gateway.apply_config()
 
-    def load_config(self, *, log=False):
+    def load_config(self: Self, *, log: bool = False) -> bool:
+        """Reload configuration and notify registered services of the change.
+        
+        :param log: Whether configuration callbacks should log applied settings.
+        :return: Whether the configuration file needed missing-option repair.
+        """
         result = self.config_manager.load(allowed_missing_file=False, initial=False)
         self.on_config_changed(log=log)
         return result
 
-    def on_registry_changed(self):
+    def on_registry_changed(self: Self) -> None:
+        """Schedule panel synchronization after command registry changes.
+        
+        :return: No return value.
+        """
         if self._network_started and not self.is_stopping():
             self.panel_synchronizer.schedule_sync()
 
-    def start_local(self):
+    def start_local(self: Self) -> None:
+        """Start local executors and load plugins.
+        
+        :return: No return value.
+        """
         if self._local_started or self.is_stopping():
             raise RuntimeError('Runtime cannot be started twice')
         self.initialize_local()
@@ -162,7 +260,11 @@ class Runtime:
         self.plugin_manager.register_builtin_plugins()
         self.plugin_manager.load_all_plugins().result()
 
-    def start(self):
+    def start(self: Self) -> None:
+        """Start the complete runtime and wait for initial QQ gateway readiness.
+        
+        :return: No return value.
+        """
         if self.state is not RuntimeState.CREATED:
             raise RuntimeError('Runtime start requires a fresh instance')
         try:
@@ -197,7 +299,11 @@ class Runtime:
             self.stop(interrupted=True)
             raise
 
-    def run(self):
+    def run(self: Self) -> None:
+        """Run the selected deployment action or serve until shutdown is requested.
+        
+        :return: No return value.
+        """
         if self.args.generate_default_only:
             from botcraft.bootstrap import generate_default
             generate_default(self.args)
@@ -221,7 +327,12 @@ class Runtime:
         finally:
             self.stop()
 
-    def execute_console(self, command):
+    def execute_console(self: Self, command: str) -> Future[None]:
+        """Submit a console command to the synchronous executor.
+        
+        :param command: Console command text to execute.
+        :return: Future completing when console command execution finishes.
+        """
         from botcraft.command.command_source import ConsoleSource
         if self.is_stopping():
             raise RuntimeError('Runtime is stopping')
@@ -291,7 +402,7 @@ class Runtime:
                 ServerInterfaceMixin._instance = None
             self.state = RuntimeState.FAILED if failed else RuntimeState.STOPPED
 
-    async def _close_network(self):
+    async def _close_network(self: Self) -> None:
         await self.gateway.close()
         await self.panel_synchronizer.close()
         await self.api_client.close()

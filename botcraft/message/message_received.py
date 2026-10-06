@@ -1,3 +1,9 @@
+from typing import TYPE_CHECKING, Any
+from typing_extensions import Self
+
+if TYPE_CHECKING:
+    from botcraft.runtime import Runtime
+    from botcraft.command.command_source import QQCommandSource
 import time
 
 from botcraft.event.qq_event import QQEvent
@@ -6,7 +12,15 @@ from botcraft.message.user import Scene, User
 
 
 class QQMessageReceived(QQEvent):
-    def __init__(self, runtime, payload, model):
+    """A received QQ message with original routing facts and a cached command source."""
+    def __init__(self: Self, runtime: "Runtime", payload: dict[str, Any], model: QQMessageReceivedData) -> None:
+        """Create a received message with an independent raw envelope and its parsed model.
+        
+        :param runtime: The runtime that received this message.
+        :param payload: Original platform JSON dispatch envelope.
+        :param model: Parsed message data; its user objects receive the conversation scene.
+        :return: The method returns no value.
+        """
         if not isinstance(model, QQMessageReceivedData):
             raise TypeError('model must be QQMessageReceivedData')
         super().__init__(runtime, payload)
@@ -28,7 +42,11 @@ class QQMessageReceived(QQEvent):
                 user.scene = scene
                 user.group_openid = raw.get('group_openid') if scene == Scene.GROUP else None
 
-    def get_command_source(self):
+    def get_command_source(self: Self) -> "QQCommandSource":
+        """Validate original author and message facts, then return the cached command source.
+        
+        :return: The command source constructed once from the original received message; invalid original facts raise ValueError.
+        """
         if self._command_source is None:
             user = self.original_user
             if user is None:

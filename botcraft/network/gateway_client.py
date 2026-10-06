@@ -1,4 +1,10 @@
 """Single-shard QQ Gateway; every reconnect identifies a fresh session."""
+from __future__ import annotations
+from typing import TYPE_CHECKING, Any, NoReturn
+from typing_extensions import Self
+
+if TYPE_CHECKING:
+    from botcraft.runtime import Runtime
 import asyncio
 from enum import Enum
 import json
@@ -31,7 +37,12 @@ _FATAL_CLOSE = {4001, 4002, 4010, 4011, 4012, 4013, 4014, 4914, 4915}
 class GatewayClient:
     READY_TIMEOUT = 60
 
-    def __init__(self, runtime):
+    def __init__(self: Self, runtime: Runtime) -> None:
+        """Initialize a single-shard QQ gateway with fresh-session reconnect state.
+        
+        :param runtime: Runtime providing the API client, network loop and event dispatcher.
+        :return: No return value.
+        """
         self.runtime = runtime
         self.state = GatewayState.CREATED
         self._ws = None
@@ -46,10 +57,18 @@ class GatewayClient:
         self._intents = runtime.get_config().gateway.intent_mask
         self._config_reconnect = False
 
-    def is_ready(self):
+    def is_ready(self: Self) -> bool:
+        """Report whether the gateway is ready and not closing.
+        
+        :return: True only while the gateway is ready and not closing.
+        """
         return self.state == GatewayState.READY and not self._closing
 
-    async def apply_config(self):
+    async def apply_config(self: Self) -> None:
+        """Apply changed intents and disconnect so the next session identifies afresh.
+        
+        :return: No return value.
+        """
         intents = self.runtime.get_config().gateway.intent_mask
         if intents == self._intents:
             return
@@ -61,7 +80,11 @@ class GatewayClient:
         if self._ws is not None:
             await self._ws.close(code=1000)
 
-    async def start(self):
+    async def start(self: Self) -> None:
+        """Start the gateway runner and wait for its first READY within the configured deadline.
+        
+        :return: No return value.
+        """
         if self.state != GatewayState.CREATED:
             raise RuntimeError('Gateway may be started only once')
         self._first_ready = asyncio.get_running_loop().create_future()
@@ -73,7 +96,11 @@ class GatewayClient:
             await self.close()
             raise GatewayError('first READY deadline exceeded (60 seconds)') from None
 
-    async def close(self):
+    async def close(self: Self) -> None:
+        """Close the gateway and wait a bounded time for the runner to finish.
+        
+        :return: No return value.
+        """
         if self.state == GatewayState.STOPPED:
             return
         failed = self.state == GatewayState.FAILED
@@ -99,13 +126,13 @@ class GatewayClient:
         if not stop_timed_out:
             self.runtime.logger.info('QQ gateway stopped' if self._runner is not None else 'QQ gateway closed (not started)')
 
-    def _fatal(self, error):
+    def _fatal(self: Self, error: BaseException) -> None:
         self.state = GatewayState.FAILED
         report_error(error, self.runtime.logger, 'Unrecoverable QQ gateway failure')
         if not self._first_ready.done():
             self._first_ready.set_exception(error)
 
-    async def _run(self):
+    async def _run(self: Self) -> None:
         attempts = 0
         try:
             while not self._closing:
@@ -170,7 +197,7 @@ class GatewayClient:
             if self.state != GatewayState.FAILED:
                 self.state = GatewayState.STOPPED if self._closing else GatewayState.OFFLINE
 
-    async def _connection(self, token):
+    async def _connection(self: Self, token: str) -> None:
         session = self.runtime.api_client._session
         timeout = self.runtime.get_config().http.timeout
         async with session.ws_connect(self._gateway_url, timeout=timeout, autoping=True,
@@ -256,7 +283,7 @@ class GatewayClient:
                     await asyncio.gather(*tasks, return_exceptions=True)
 
     @staticmethod
-    def _decode(text):
+    def _decode(text: str) -> dict[str, Any]:
         try:
             payload = json.loads(text)
         except (ValueError, TypeError):
@@ -265,7 +292,7 @@ class GatewayClient:
             raise GatewayError('invalid gateway envelope')
         return payload
 
-    def _raise_close(self, ws, message):
+    def _raise_close(self: Self, ws: aiohttp.ClientWebSocketResponse, message: aiohttp.WSMessage) -> NoReturn:
         code = message.data if message.type == aiohttp.WSMsgType.CLOSE else ws.close_code
         if self._closing:
             raise GatewayError('gateway closed for shutdown', recoverable=True)
@@ -276,7 +303,7 @@ class GatewayClient:
             raise error
         raise GatewayError(f'gateway connection closed (code {code})', close_code=code, recoverable=True)
 
-    async def _heartbeats(self, ws, interval):
+    async def _heartbeats(self: Self, ws: aiohttp.ClientWebSocketResponse, interval: float) -> None:
         while not self._closing:
             await asyncio.sleep(interval)
             if self._ack_pending:

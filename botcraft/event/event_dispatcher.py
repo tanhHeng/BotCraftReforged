@@ -1,9 +1,15 @@
+from concurrent.futures import Future
+from typing import TYPE_CHECKING, Any
+from typing_extensions import Self
+from botcraft.event.qq_event import QQEvent
+
+if TYPE_CHECKING:
+    from botcraft.runtime import Runtime
 import json
 
 from mcdreforged.executor.task_executor_queue import TaskPriority
 from botcraft.event.event_parser import EventParser
 from botcraft.message.message_received import QQMessageReceived
-from botcraft.event.qq_interaction import QQInteraction
 from botcraft.plugin.plugin_event import PluginEvents, normalize_event_id
 from botcraft.utils.future_utils import observe_future
 
@@ -11,11 +17,22 @@ _LOG_CONTROL_CHARACTERS = {code: repr(chr(code))[1:-1] for code in (*range(32), 
 
 
 class EventDispatcher:
-    def __init__(self, runtime):
+    """Synchronous command and plugin event delivery from incoming QQ envelopes."""
+    def __init__(self: Self, runtime: "Runtime") -> None:
+        """Create the QQ event parser and dispatcher for a runtime.
+        
+        :param runtime: Runtime providing event execution, plugins and received-message logging.
+        :return: The method returns no value.
+        """
         self.runtime = runtime
         self.parser = EventParser(runtime)
 
-    def submit_payload(self, payload):
+    def submit_payload(self: Self, payload: dict[str, Any]) -> Future[None] | None:
+        """Parse and register incoming facts before scheduling synchronous event processing.
+        
+        :param payload: Platform JSON dispatch envelope.
+        :return: The observed processing future, or None when the runtime is stopping.
+        """
         if self.runtime.is_stopping():
             return None
         event = self.parser.parse(payload)
@@ -23,7 +40,7 @@ class EventDispatcher:
         future = self.runtime.sync_task_executor.submit(lambda: self.process(event), priority=TaskPriority.INFO)
         return observe_future(future, self.runtime.logger, 'QQ event dispatch')
 
-    def _log_received_message(self, event):
+    def _log_received_message(self: Self, event: QQEvent) -> None:
         if not self.runtime.get_config().log_received_messages or event.event_type not in self.parser.MESSAGE_EVENTS:
             return
         data = event.raw_payload.get('d')
@@ -51,7 +68,12 @@ class EventDispatcher:
                                  identity.translate(_LOG_CONTROL_CHARACTERS),
                                  ('|'.join(parts) if parts else '[empty]').translate(_LOG_CONTROL_CHARACTERS))
 
-    def process(self, event):
+    def process(self: Self, event: QQEvent) -> None:
+        """Process message commands and dispatch the received event to plugin listeners.
+        
+        :param event: Parsed or generic QQ event; model failures exclude legacy event listeners.
+        :return: The method returns no value.
+        """
         self._log_received_message(event)
         manager = self.runtime.plugin_manager
         if isinstance(event, QQMessageReceived):

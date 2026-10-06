@@ -1,12 +1,29 @@
+from typing import TYPE_CHECKING
+from typing_extensions import Self
+from botcraft.message.message_received import QQMessageReceived
+
+if TYPE_CHECKING:
+    from botcraft.runtime import Runtime
 import re
 from botcraft.utils.future_utils import report_error
 
 
 class MessageReactor:
-    def __init__(self, runtime):
+    """Command dispatch for supported incoming message text."""
+    def __init__(self: Self, runtime: "Runtime") -> None:
+        """Create a reactor for incoming QQ command messages.
+        
+        :param runtime: Runtime providing command execution and error reporting.
+        :return: The method returns no value.
+        """
         self.runtime = runtime
 
-    def react(self, message):
+    def react(self: Self, message: QQMessageReceived) -> None:
+        """Execute a matching command using the original received message as its source.
+        
+        :param message: Received message; only string content is inspected and a leading bot mention may be removed.
+        :return: The method returns no value.
+        """
         content = message.message_data.content
         if not isinstance(content, str):
             return

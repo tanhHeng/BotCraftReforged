@@ -1,4 +1,8 @@
 """Host-independent QQ configuration, reusing MCDR's YAML merge and save logic."""
+import logging
+from os import PathLike
+from typing import Any, Mapping
+from typing_extensions import Self
 import math
 import threading
 from importlib.resources import files
@@ -17,14 +21,22 @@ class GatewayConfig(Serializable):
     intents: List[str] = ['GROUP_AND_C2C_EVENT', 'INTERACTION']
 
     @property
-    def intent_mask(self) -> int:
+    def intent_mask(self: Self) -> int:
+        """Combine configured QQ gateway intent names into a protocol bitmask.
+        
+        :return: Result of the operation.
+        """
         bits = {'GROUP_AND_C2C_EVENT': 1 << 25, 'INTERACTION': 1 << 26, 'MESSAGE_AUDIT': 1 << 27}
         mask = 0
         for name in self.intents:
             mask |= bits[name]
         return mask
 
-    def on_deserialization(self):
+    def on_deserialization(self: Self) -> None:
+        """Reject unsupported gateway intent names after deserialization.
+        
+        :return: No return value.
+        """
         if any(name not in {'GROUP_AND_C2C_EVENT', 'INTERACTION', 'MESSAGE_AUDIT'} for name in self.intents):
             raise ValueError('Unknown QQ gateway intent name')
 
@@ -32,7 +44,11 @@ class GatewayConfig(Serializable):
 class HttpConfig(Serializable):
     timeout: float = 10.0
 
-    def on_deserialization(self):
+    def on_deserialization(self: Self) -> None:
+        """Require a finite positive HTTP timeout after deserialization.
+        
+        :return: No return value.
+        """
         if not math.isfinite(self.timeout) or self.timeout <= 0:
             raise ValueError('http.timeout must be finite and positive')
 
@@ -41,7 +57,11 @@ class PermissionConfig(Serializable):
     mode: str = 'mixed'
     super_admins: List[str] = []
 
-    def on_deserialization(self):
+    def on_deserialization(self: Self) -> None:
+        """Validate the permission policy and super-administrator identities.
+        
+        :return: No return value.
+        """
         if self.mode not in {'native', 'role', 'mixed'}:
             raise ValueError('Unknown permission mode')
         if any(not identity for identity in self.super_admins):
@@ -62,24 +82,44 @@ class Config(Serializable):
     http: HttpConfig = HttpConfig.get_default()
     permission: PermissionConfig = PermissionConfig.get_default()
 
-    def is_debug_on(self) -> bool:
+    def is_debug_on(self: Self) -> bool:
+        """Report whether any standalone debug option is enabled.
+        
+        :return: Result of the operation.
+        """
         return any(self.debug.values())
 
-    def __repr__(self):
+    def __repr__(self: Self) -> str:
         return 'Config(language={!r}, secret=<redacted>)'.format(self.language)
 
-    def on_deserialization(self):
+    def on_deserialization(self: Self) -> None:
+        """Require nonempty language and plugin directory settings.
+        
+        :return: No return value.
+        """
         if not self.language or any(not path for path in self.plugin_directories):
             raise ValueError('Language and plugin paths must be nonempty')
 
 
-def load_resource_yaml(resource_path):
+def load_resource_yaml(resource_path: str) -> dict[str, Any]:
+    """Load a bundled YAML resource from the BotCraft package.
+    
+    :param resource_path: Package-relative YAML template path.
+    :return: Parsed YAML template mapping.
+    """
     return YAML().load(files('botcraft').joinpath(resource_path).read_text(encoding='utf8'))
 
 
 class ResourceStorageMixin:
     """Replace only the native package-bound lazy resource provider (MCDR 2.14.4)."""
-    def __init__(self, logger, path, resource_path):
+    def __init__(self: Self, logger: logging.Logger, path: str | PathLike[str], resource_path: str) -> None:
+        """Bind native YAML storage to a BotCraft resource template.
+        
+        :param logger: Logger used for storage diagnostics.
+        :param path: Configuration file path.
+        :param resource_path: Package-relative YAML template path.
+        :return: No return value.
+        """
         super().__init__(logger, str(path), resource_path)
         self._YamlDataStorage__default_data = LazyItem(lambda: load_resource_yaml(resource_path))
 
@@ -92,17 +132,23 @@ class ConfigManager(MCDReforgedConfigManager):
     DEFAULT_CONFIG_RESOURCE_PATH = 'resources/default_config.yml'
     IMMUTABLE_FIELDS = ('appid', 'secret', 'advanced_console', 'disable_console_thread')
 
-    def __init__(self, logger, path):
+    def __init__(self: Self, logger: logging.Logger, path: str | PathLike[str]) -> None:
+        """Create native-backed storage and a default standalone configuration.
+        
+        :param logger: Logger used for storage diagnostics.
+        :param path: Configuration file path.
+        :return: No return value.
+        """
         self.logger = logger
         self.path = str(path)
         self._MCDReforgedConfigManager__storage = self._new_storage()
         self._MCDReforgedConfigManager__config = Config.get_default()
         self._MCDReforgedConfigManager__config_lock = threading.Lock()
 
-    def _new_storage(self):
+    def _new_storage(self: Self) -> ConfigStorage:
         return ConfigStorage(self.logger, self.path, self.DEFAULT_CONFIG_RESOURCE_PATH)
 
-    def _deserialize(self, data, **kwargs):
+    def _deserialize(self: Self, data: dict[str, Any], **kwargs: Any) -> Config:
         if not isinstance(data, dict):
             raise ValueError('BotCraft configuration must be a mapping')
         if any(key in data and not isinstance(data[key], dict) for key in ('gateway', 'http', 'permission', 'debug')):
@@ -115,7 +161,7 @@ class ConfigManager(MCDReforgedConfigManager):
                 data = dict(data, debug={name: value for name, value in data['debug'].items() if name in known})
         if isinstance(data, dict) and isinstance(data.get('http'), dict) and type(data['http'].get('timeout')) is bool:
             raise ValueError('http.timeout must be a number, not bool')
-        def redundant(*_):
+        def redundant(*_: object) -> None:
             unknown[0] = True
         try:
             result = Config.deserialize(data, redundancy_callback=redundant, **kwargs)
@@ -126,11 +172,21 @@ class ConfigManager(MCDReforgedConfigManager):
             self.logger.warning('Unknown BotCraft configuration fields were ignored')
         return result
 
-    def validate(self, data):
-        """Validate supplied fields with native defaults without touching active state or disk."""
+    def validate(self: Self, data: dict[str, Any]) -> Config:
+        """Validate supplied fields using native defaults without changing state or disk.
+        
+        :param data: Supplied configuration mapping, including open YAML field values.
+        :return: Validated standalone configuration with native defaults.
+        """
         return self._deserialize(data)
 
-    def load(self, allowed_missing_file=False, *, initial=True):
+    def load(self: Self, allowed_missing_file: bool = False, *, initial: bool = True) -> bool:
+        """Validate and atomically load configuration, repairing missing options when allowed.
+        
+        :param allowed_missing_file: Whether a missing configuration file may be initialized.
+        :param initial: Whether this is startup loading, permitting immutable startup fields and repair saves.
+        :return: Whether native storage found missing configuration options.
+        """
         candidate_storage = self._new_storage()
         try:
             if candidate_storage.file_presents():
@@ -159,10 +215,19 @@ class ConfigManager(MCDReforgedConfigManager):
             self.save()
         return missing
 
-    def save_default(self):
+    def save_default(self: Self) -> None:
+        """Write the bundled default configuration through native storage.
+        
+        :return: No return value.
+        """
         self._MCDReforgedConfigManager__storage.save_default()
 
-    def set_values(self, changes):
+    def set_values(self: Self, changes: Mapping[str | tuple[str, ...], Any]) -> None:
+        """Validate and atomically apply selected mutable configuration fields.
+        
+        :param changes: Mapping of dotted or tuple field paths to replacement configuration values.
+        :return: No return value.
+        """
         with self._MCDReforgedConfigManager__config_lock:
             candidate = self.get_config().serialize()
             for path, value in changes.items():

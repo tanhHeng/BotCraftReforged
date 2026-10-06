@@ -1,4 +1,11 @@
 """Synchronous validation/snapshot boundary for typed QQ operations."""
+from concurrent.futures import Future
+from typing import TYPE_CHECKING, Any
+from typing_extensions import Self
+
+if TYPE_CHECKING:
+    from botcraft.runtime import Runtime
+    from botcraft.command.command_source import QQCommandSource
 import asyncio
 from copy import deepcopy
 from dataclasses import dataclass
@@ -27,9 +34,15 @@ class _Passive:
 
 
 class MessageSender:
+    """Validated QQ sends, deletes and interaction responses with payload snapshots."""
     PASSIVE_RETENTION = 600
 
-    def __init__(self, runtime):
+    def __init__(self: Self, runtime: "Runtime") -> None:
+        """Create the synchronous QQ operation validation and payload snapshot boundary.
+        
+        :param runtime: Runtime providing translation, network submission and the QQ API client.
+        :return: The method returns no value.
+        """
         self.runtime = runtime
         self._lock = RLock()
         self._passive = {}
@@ -39,7 +52,7 @@ class MessageSender:
         self._timer_generation = 0
         self._closed = False
 
-    def _arm_expiry(self):
+    def _arm_expiry(self: Self) -> None:
         if not self._closed and self._expiry_timer is None and self._expirations:
             delay = max(0, self._expirations[0][0] - time.monotonic())
             self._timer_generation += 1
@@ -47,7 +60,7 @@ class MessageSender:
             self._expiry_timer.daemon = True
             self._expiry_timer.start()
 
-    def _expire_passive(self, generation):
+    def _expire_passive(self: Self, generation: int) -> None:
         with self._lock:
             if generation != self._timer_generation:
                 return
@@ -55,7 +68,11 @@ class MessageSender:
             self._cleanup(time.monotonic())
             self._arm_expiry()
 
-    def close(self):
+    def close(self: Self) -> None:
+        """Stop passive expiry scheduling and discard retained passive contexts.
+        
+        :return: The method returns no value.
+        """
         with self._lock:
             self._closed = True
             self._timer_generation += 1
@@ -66,13 +83,13 @@ class MessageSender:
             self._expirations.clear()
 
     @staticmethod
-    def _string(value, name):
+    def _string(value: str | None, name: str) -> str:
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f'{name} must be a non-empty string')
         return value
 
     @staticmethod
-    def _route(target):
+    def _route(target: User | Group) -> tuple[str, str]:
         if not isinstance(target, (User, Group)):
             raise TypeError('target must be User or Group')
         scene, conversation = target.route()
@@ -82,7 +99,7 @@ class MessageSender:
         return scene, MessageSender._string(conversation, 'conversation')
 
     @staticmethod
-    def _incoming_route(event):
+    def _incoming_route(event: QQEvent) -> tuple[str, str]:
         payload = event.raw_payload
         data = payload.get('d')
         if not isinstance(data, dict):
@@ -96,11 +113,11 @@ class MessageSender:
             return 'c2c', MessageSender._string(author.get('user_openid'), 'user_openid')
         raise ValueError('event does not have a supported message route')
 
-    def _ready(self):
+    def _ready(self: Self) -> None:
         if self.runtime.is_stopping() or not self.runtime.is_ready() or not self.runtime.gateway.is_ready():
             raise NotReadyError('QQ runtime/gateway is not ready for new operations')
 
-    def _cleanup(self, now):
+    def _cleanup(self: Self, now: float) -> None:
         while self._expirations and self._expirations[0][0] <= now:
             expiry, key = heapq.heappop(self._expirations)
             entry = self._passive.get(key)
@@ -108,7 +125,7 @@ class MessageSender:
                 del self._passive[key]
 
     @staticmethod
-    def _platform_time(event):
+    def _platform_time(event: QQEvent) -> float:
         timestamp = event.raw_payload.get('d', {}).get('timestamp')
         relationship = event.raw_payload.get('t') in ('GROUP_ADD_ROBOT', 'GROUP_MSG_RECEIVE')
         try:
@@ -129,7 +146,12 @@ class MessageSender:
         except (ValueError, TypeError, OverflowError, OSError):
             raise ValueError('passive context lacks a trustworthy original platform timestamp') from None
 
-    def register_incoming(self, event):
+    def register_incoming(self: Self, event: QQEvent) -> None:
+        """Record original supported incoming contexts and their platform-derived passive deadlines.
+        
+        :param event: Original QQ event; unsupported, malformed or already expired contexts are not retained.
+        :return: The method returns no value.
+        """
         if not isinstance(event, QQEvent):
             raise TypeError('incoming must be QQEvent')
         if self._closed:
@@ -168,7 +190,7 @@ class MessageSender:
             entry = self._passive[key]
             event._passive_deadline = entry.expires_at
 
-    def _passive_seq(self, scene, conversation, field, association, context):
+    def _passive_seq(self: Self, scene: str, conversation: str, field: str, association: str, context: QQEvent | None) -> int:
         if not isinstance(context, QQEvent):
             raise ValueError('passive sending requires the original incoming event')
         expected_route = self._incoming_route(context)
@@ -188,7 +210,7 @@ class MessageSender:
             entry.sequence += 1
             return entry.sequence
 
-    def _reference(self, message, scene, conversation):
+    def _reference(self: Self, message: QQMessageReceived | QQMessageReceipt | None, scene: str, conversation: str) -> dict[str, str] | None:
         if message is None:
             return None
         if isinstance(message, QQMessageReceived):
@@ -211,7 +233,7 @@ class MessageSender:
             raise ValueError('reference belongs to a different conversation')
         return {'message_id': self._string(index, 'reference index')}
 
-    def _content(self, message, target, mention):
+    def _content(self: Self, message: str | QTextBase, target: User | Group, mention: bool) -> dict[str, Any]:
         if not isinstance(message, (str, QTextBase)):
             raise TypeError('message must be str or QTextBase')
         evaluated = self.runtime.translation_manager.evaluate(message)
@@ -240,8 +262,18 @@ class MessageSender:
                     raise TypeError('this content does not support a group mention')
         return payload
 
-    def send(self, target, message, *, refer_msg=None, msg_id=None, event_id=None,
-             passive_context=None, mention=False):
+    def send(self: Self, target: User | Group, message: str | QTextBase, *, refer_msg: QQMessageReceived | QQMessageReceipt | None = None, msg_id: str | None = None, event_id: str | None = None, passive_context: QQEvent | None = None, mention: bool = False) -> Future[QQMessageReceipt]:
+        """Validate routing and content synchronously, snapshot the payload, then submit the send operation.
+        
+        :param target: User or group identifying a supported group or c2c conversation.
+        :param message: Literal or typed QQ text. Existing delayed translation objects are evaluated before payload snapshotting.
+        :param refer_msg: Optional received message or receipt reference from the same conversation.
+        :param msg_id: Optional original message ID for a passive reply; mutually exclusive with event_id.
+        :param event_id: Optional original GROUP_ADD_ROBOT or GROUP_MSG_RECEIVE event ID for a passive reply.
+        :param passive_context: Original registered incoming event required when a passive association ID is supplied.
+        :param mention: Whether to prepend a mention for a User target; only supported group text formats receive a mention.
+        :return: A future yielding the successful receipt or the network operation exception.
+        """
         scene, conversation = self._route(target)
         if not isinstance(mention, bool):
             raise TypeError('mention must be bool')
@@ -267,13 +299,20 @@ class MessageSender:
             if msg_id is not None:
                 payload['msg_seq'] = sequence
 
-        async def send_snapshot():
+        async def send_snapshot() -> QQMessageReceipt:
             raw = await self.runtime.api_client.send_message(scene, conversation, payload)
             return QQMessageReceipt(raw, scene, conversation)
 
         return self.runtime.network_loop.submit(send_snapshot(), operation=f'send {scene} message')
 
-    def reply(self, source, message, *, refer_msg=None):
+    def reply(self: Self, source: "QQCommandSource", message: str | QTextBase, *, refer_msg: QQMessageReceived | QQMessageReceipt | None = None) -> Future[QQMessageReceipt]:
+        """Submit a passive reply using the command source original message and target.
+        
+        :param source: QQ command source with an original incoming message and non-empty message ID.
+        :param message: Literal or typed QQ text. Existing delayed translation objects are evaluated before payload snapshotting.
+        :param refer_msg: Optional received message or receipt reference from the same conversation.
+        :return: A future yielding the successful receipt or the operation exception.
+        """
         from botcraft.command.command_source import QQCommandSource
         if not isinstance(source, QQCommandSource):
             raise TypeError('reply requires QQCommandSource')
@@ -283,7 +322,14 @@ class MessageSender:
             raise ValueError('source has no original incoming message')
         return self.send(origin.original_user, message, refer_msg=refer_msg, msg_id=msg_id, passive_context=origin)
 
-    def reply_event(self, event, message, *, refer_msg=None):
+    def reply_event(self: Self, event: QQEvent, message: str | QTextBase, *, refer_msg: QQMessageReceived | QQMessageReceipt | None = None) -> Future[QQMessageReceipt]:
+        """Submit a passive group reply associated with an original supported relationship event.
+        
+        :param event: Original GROUP_ADD_ROBOT or GROUP_MSG_RECEIVE event with a valid event ID.
+        :param message: Literal or typed QQ text. Existing delayed translation objects are evaluated before payload snapshotting.
+        :param refer_msg: Optional received message or receipt reference from the same conversation.
+        :return: A future yielding the successful receipt or the operation exception.
+        """
         if not isinstance(event, QQEvent) or event.raw_payload.get('t') not in ('GROUP_ADD_ROBOT', 'GROUP_MSG_RECEIVE'):
             raise TypeError('reply_event requires GROUP_ADD_ROBOT or GROUP_MSG_RECEIVE QQEvent')
         scene, conversation = self._incoming_route(event)
@@ -291,7 +337,12 @@ class MessageSender:
         return self.send(Group(group_openid=conversation), message, refer_msg=refer_msg,
                          event_id=event_id, passive_context=event)
 
-    def delete_message(self, message):
+    def delete_message(self: Self, message: QQMessageReceived | QQMessageReceipt) -> Future[None]:
+        """Validate message routing facts and submit deletion of a received or sent message.
+        
+        :param message: Original received message or send receipt containing the message ID and route.
+        :return: A future completed with None on successful deletion or with the operation exception.
+        """
         if isinstance(message, QQMessageReceived):
             scene, conversation = self._incoming_route(message)
             id = self._string(message.raw_payload['d'].get('id'), 'message id')
@@ -307,14 +358,26 @@ class MessageSender:
         return self.runtime.network_loop.submit(self.runtime.api_client.delete_message(scene, conversation, id),
                                                 operation=f'delete {scene} message')
 
-    def delete_message_with_id(self, target, id):
+    def delete_message_with_id(self: Self, target: User | Group, id: str) -> Future[None]:
+        """Validate a target and explicit message ID, then submit deletion.
+        
+        :param target: User or group identifying the conversation containing the message.
+        :param id: Non-empty official message ID to delete.
+        :return: A future completed with None on successful deletion or with the operation exception.
+        """
         scene, conversation = self._route(target)
         id = self._string(id, 'message id')
         self._ready()
         return self.runtime.network_loop.submit(self.runtime.api_client.delete_message(scene, conversation, id),
                                                 operation=f'delete {scene} message')
 
-    def respond_interaction(self, event, code):
+    def respond_interaction(self: Self, event: QQInteraction, code: Enum | int) -> Future[None]:
+        """Validate and submit one response for an interaction ID.
+        
+        :param event: Received QQ interaction with a valid original interaction ID.
+        :param code: An integer from 0 through 5 or an enum with such an integer value; booleans are rejected.
+        :return: A future completed with None on success. Definitely unsent failures release the ID; an unknown network result retains it.
+        """
         if not isinstance(event, QQInteraction):
             raise TypeError('respond_interaction requires QQInteraction')
         value = code.value if isinstance(code, Enum) else code
@@ -328,7 +391,7 @@ class MessageSender:
                 raise ValueError('this interaction response is already submitted')
             self._interactions.add(id)
 
-        async def respond_snapshot():
+        async def respond_snapshot() -> None:
             try:
                 await self.runtime.api_client.respond_interaction(id, value)
             except asyncio.CancelledError:

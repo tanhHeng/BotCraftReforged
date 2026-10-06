@@ -1,4 +1,12 @@
 """Dedicated protocol loop, deliberately separate from plugin executors."""
+from __future__ import annotations
+from typing import TYPE_CHECKING, Any, Coroutine, TypeVar
+from typing_extensions import Self
+
+if TYPE_CHECKING:
+    from botcraft.runtime import Runtime
+
+T = TypeVar('T')
 import asyncio
 from concurrent.futures import Future
 from threading import Event, RLock, Thread, current_thread
@@ -8,7 +16,12 @@ from .exception import NetworkError, ResultUnknownError
 
 
 class NetworkLoop:
-    def __init__(self, runtime):
+    def __init__(self: Self, runtime: Runtime) -> None:
+        """Create a dedicated protocol-loop owner without starting its thread.
+        
+        :param runtime: Runtime providing protocol configuration and logging.
+        :return: No return value.
+        """
         self.runtime = runtime
         self.logger = runtime.logger
         self._loop = None
@@ -19,7 +32,11 @@ class NetworkLoop:
         self._stopped = False
         self._pending = {}
 
-    def start(self):
+    def start(self: Self) -> None:
+        """Start the network thread and wait until it accepts submissions.
+        
+        :return: No return value.
+        """
         with self._lock:
             if self._thread is not None or self._stopped:
                 raise RuntimeError('NetworkLoop may be started only once')
@@ -29,7 +46,7 @@ class NetworkLoop:
         if not self._accepting:
             raise RuntimeError('Network loop failed to start')
 
-    def _run(self):
+    def _run(self: Self) -> None:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         with self._lock:
@@ -56,7 +73,13 @@ class NetworkLoop:
                     complete_future(future, self.logger, operation,
                                     error=ResultUnknownError('network loop stopped before operation completed'))
 
-    def submit(self, coroutine, operation='network operation'):
+    def submit(self: Self, coroutine: Coroutine[Any, Any, T], operation: str = 'network operation') -> Future[T]:
+        """Submit a protocol coroutine with cancellation propagation and observed failure.
+        
+        :param coroutine: Coroutine to run on the dedicated protocol loop.
+        :param operation: Human-readable label for completion diagnostics.
+        :return: Future carrying the coroutine result or protocol failure.
+        """
         if not asyncio.iscoroutine(coroutine):
             raise TypeError('NetworkLoop.submit requires a coroutine')
         future = Future()
@@ -70,7 +93,7 @@ class NetworkLoop:
             self._loop.call_soon_threadsafe(self._begin, future, coroutine, operation)
         return future
 
-    def _cancel_submission(self, future):
+    def _cancel_submission(self: Self, future: Future[T]) -> None:
         if not future.cancelled():
             return
         with self._lock:
@@ -79,7 +102,7 @@ class NetworkLoop:
                 return
             self._loop.call_soon_threadsafe(pending[1].cancel)
 
-    def _begin(self, future, coroutine, operation):
+    def _begin(self: Self, future: Future[T], coroutine: Coroutine[Any, Any, T], operation: str) -> None:
         if future.cancelled():
             coroutine.close()
             with self._lock:
@@ -87,7 +110,7 @@ class NetworkLoop:
             return
         started = False
 
-        async def execute():
+        async def execute() -> None:
             nonlocal started
             started = True
             try:
@@ -108,7 +131,7 @@ class NetworkLoop:
                 self._pending[future] = (operation, task)
             cancelled = future.cancelled()
 
-        def release_unstarted(done):
+        def release_unstarted(done: asyncio.Task[None]) -> None:
             if not started:
                 coroutine.close()
                 with self._lock:
@@ -119,7 +142,12 @@ class NetworkLoop:
         if cancelled:
             task.cancel()
 
-    def stop(self, timeout=10):
+    def stop(self: Self, timeout: float = 10) -> None:
+        """Cancel network work and join the protocol thread within a bounded timeout.
+        
+        :param timeout: Maximum number of seconds to wait for the network thread.
+        :return: No return value.
+        """
         if self._thread is current_thread():
             raise RuntimeError('NetworkLoop.stop cannot join its own thread')
         with self._lock:
@@ -129,7 +157,7 @@ class NetworkLoop:
             self._accepting = False
             loop = self._loop
 
-        async def shutdown():
+        async def shutdown() -> None:
             current = asyncio.current_task()
             tasks = [task for task in asyncio.all_tasks() if task is not current]
             for task in tasks:
@@ -149,5 +177,9 @@ class NetworkLoop:
                                     error=ResultUnknownError('network shutdown deadline exceeded'))
             self.logger.warning('Network thread did not stop before its deadline')
 
-    def is_on_thread(self):
+    def is_on_thread(self: Self) -> bool:
+        """Report whether the caller is running on the dedicated network thread.
+        
+        :return: Result of the operation.
+        """
         return current_thread() is self._thread

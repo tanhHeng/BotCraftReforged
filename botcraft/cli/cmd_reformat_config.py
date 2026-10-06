@@ -8,7 +8,14 @@ from botcraft.bootstrap import read_validated_config
 from botcraft.config import load_resource_yaml
 
 
-def reformat_config(input_path: str, output_path=None, *, quiet: bool = False) -> None:
+def reformat_config(input_path: str, output_path: str | None = None, *, quiet: bool = False) -> None:
+    """Validate and reformat YAML using the native default-template merge and writer.
+    
+    :param input_path: Configuration YAML file to validate and reformat.
+    :param output_path: Destination YAML path, or the input path when omitted.
+    :param quiet: Whether to suppress reformatting status output.
+    :return: No return value.
+    """
     data, _ = read_validated_config(input_path)
     formatted = load_resource_yaml('resources/default_config.yml')
     YamlDataStorage.merge_dict(data, formatted)

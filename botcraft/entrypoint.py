@@ -3,6 +3,10 @@ import sys
 
 
 def entrypoint() -> None:
+    """Dispatch the process CLI and exit with its status, handling interruption and errors.
+    
+    :return: No return value.
+    """
     from botcraft.cli.cli_entry import cli_dispatch
     try:
         status = cli_dispatch()

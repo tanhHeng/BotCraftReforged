@@ -1,4 +1,5 @@
 """Native multi-file requirements/resources/import mechanisms, QQ coupling only."""
+from typing_extensions import Self
 import sys
 from mcdreforged.plugin.type.multi_file_plugin import MultiFilePlugin as NativeMultiFilePlugin
 from botcraft.constants import plugin_constant
@@ -13,18 +14,18 @@ class MultiFilePlugin(RegularPlugin, NativeMultiFilePlugin):
     _MultiFilePlugin__check_requirements = bind_native(NativeMultiFilePlugin._MultiFilePlugin__check_requirements, runtime=True)
     _MultiFilePlugin__register_default_translation = bind_native(NativeMultiFilePlugin._MultiFilePlugin__register_default_translation, runtime=True)
 
-    def _on_load(self):
+    def _on_load(self: Self) -> None:
         self._load_structure()
         # Import failure participates in native load/reload failure isolation,
         # instead of the native ready hook swallowing it and reporting READY.
         sys.path.append(self._module_search_path)
         self._load_entry_instance()
 
-    def _on_ready(self):
+    def _on_ready(self: Self) -> None:
         self._register_default_listeners()
         self._MultiFilePlugin__register_default_translation()
 
-    def _on_unload(self):
+    def _on_unload(self: Self) -> None:
         RegularPlugin._on_unload(self)
         try:
             sys.path.remove(self._module_search_path)

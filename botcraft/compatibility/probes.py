@@ -3,6 +3,14 @@
 Run with ``python -m botcraft.compatibility.probes``. This is a local runtime
 check, not acceptance of credentials, QQ networking, menus or Minecraft.
 """
+from __future__ import annotations
+from collections.abc import Callable, Mapping
+from typing import Any, TYPE_CHECKING, NoReturn
+
+if TYPE_CHECKING:
+    from botcraft.runtime import Runtime
+    from botcraft.command.command_source import QQCommandSource
+    from botcraft.message.message_received import QQMessageReceived as QQMessageEvent
 import asyncio
 from datetime import datetime, timezone
 import json
@@ -18,12 +26,25 @@ _REPORT_PREFIX = 'BOTCRAFT_CAPABILITY_REPORT='
 _TIMEOUT = 20
 
 
-def require(condition, message):
+def require(condition: bool, message: str) -> None:
+    """Require a consumer-visible capability invariant.
+    
+    :param condition: Whether the invariant holds.
+    :param message: Diagnostic raised when the invariant fails.
+    :return: No value is returned.
+    """
     if not condition:
         raise AssertionError(message)
 
 
-def rejects(error_types, operation, message):
+def rejects(error_types: type[BaseException] | tuple[type[BaseException], ...], operation: Callable[[], Any], message: str) -> None:
+    """Require an operation to reject input with an expected error.
+    
+    :param error_types: Accepted exception classes.
+    :param operation: Consumer operation to invoke.
+    :param message: Diagnostic raised if the operation does not reject input.
+    :return: No value is returned.
+    """
     try:
         operation()
     except error_types:
@@ -31,24 +52,30 @@ def rejects(error_types, operation, message):
     raise AssertionError(message)
 
 
-def _journal():
+def _journal() -> list[list[Any]]:
     path = Path('probe-journal.jsonl')
     return [json.loads(line) for line in path.read_text(encoding='utf8').splitlines()] if path.exists() else []
 
 
-def _plugin_code(identity, *, solo=False, decorated=False):
+def _plugin_code(identity: str, *, solo: bool = False, decorated: bool = False) -> str:
     metadata = "PLUGIN_METADATA = " + repr({'id': identity, 'version': '1.0.0', 'name': 'Capability ' + identity}) + '\n' if solo else ''
     decoration = '''
 from botcraft.api.decorator import event_listener
 
 @event_listener('capability.priority', priority=10)
-def early(server):
+def early(server: QQPluginServerInterface) -> None:
     record('priority', 'early', QQServerInterface.psi().get_self_metadata().id)
 ''' if decorated else ''
     return metadata + '''
 import json
 from pathlib import Path
 from threading import Event
+from typing import Any
+from types import ModuleType
+from mcdreforged.command.builder.common import CommandContext
+from botcraft.command.command_source import QQCommandSource
+from botcraft.plugin.si.plugin_server_interface import QQPluginServerInterface
+from botcraft.message.message_received import QQMessageReceived
 from mcdreforged.command.builder.nodes.basic import Literal
 from mcdreforged.command.builder.nodes.arguments import Integer
 from botcraft.plugin.si.server_interface import QQServerInterface
@@ -57,30 +84,30 @@ generation = 0
 async_complete = Event()
 message_complete = Event()
 
-def record(kind, *values):
+def record(kind: str, *values: Any) -> None:
     with Path('probe-journal.jsonl').open('a', encoding='utf8') as stream:
         stream.write(json.dumps([kind, *values]) + '\\n')
 
-def command(source, context):
+def command(source: QQCommandSource, context: CommandContext) -> None:
     record('command', QQServerInterface.psi().get_self_metadata().id, context['amount'], source.scene)
 
-def late(server):
+def late(server: QQPluginServerInterface) -> None:
     record('priority', 'late', QQServerInterface.psi().get_self_metadata().id)
 
-async def async_listener(server):
+async def async_listener(server: QQPluginServerInterface) -> None:
     import asyncio
     before = QQServerInterface.psi().get_self_metadata().id
     await asyncio.sleep(0)
     record('async-listener', before, QQServerInterface.psi().get_self_metadata().id)
     async_complete.set()
 
-def on_message(server, event):
+def on_message(server: QQPluginServerInterface, event: QQMessageReceived) -> None:
     if server.get_self_metadata().id == 'cap_solo':
         record('message', event.message_data.author.id, event.get_command_source().conversation,
                QQServerInterface.psi().get_self_metadata().id)
         message_complete.set()
 
-def on_load(server, old):
+def on_load(server: QQPluginServerInterface, old: ModuleType | None) -> None:
     global generation
     identity = server.get_self_metadata().id
     generation = 1 if old is None else old.generation + 1
@@ -94,12 +121,12 @@ def on_load(server, old):
         server.register_event_listener('capability.priority', late, priority=90)
         server.register_event_listener('capability.async', async_listener)
 
-def on_unload(server):
+def on_unload(server: QQPluginServerInterface) -> None:
     record('unload', server.get_self_metadata().id)
 ''' + decoration
 
 
-def _write_fixtures():
+def _write_fixtures() -> dict[str, Path]:
     paths = {'cap_solo': Path('plugins/cap_solo.py'),
              'cap_directory': Path('plugins/cap_directory'),
              'cap_packed': Path('plugins/cap_packed.mcdr')}
@@ -119,7 +146,7 @@ def _write_fixtures():
     return paths
 
 
-def _prepare():
+def _prepare() -> dict[str, Path]:
     from ruamel.yaml import YAML
     from botcraft.config import load_resource_yaml
     Path('plugins').mkdir()
@@ -135,7 +162,7 @@ def _prepare():
     return _write_fixtures()
 
 
-def _source(runtime, *, scene='group', role='member', identity='official-user'):
+def _source(runtime: Runtime, *, scene: str = 'group', role: str = 'member', identity: str = 'official-user') -> tuple[QQCommandSource, QQMessageEvent, dict[str, Any]]:
     from botcraft.event.event_parser import EventParser
     author = {'id': identity, 'member_role': role}
     data = {'id': 'received-' + scene, 'author': author, 'content': 'capability', 'message_type': 0,
@@ -151,7 +178,7 @@ def _source(runtime, *, scene='group', role='member', identity='official-user'):
     return received.get_command_source(), received, payload
 
 
-def _config_permissions(runtime):
+def _config_permissions(runtime: Runtime) -> None:
     from ruamel.yaml import YAML
     from mcdreforged.preference.preference_manager import PreferenceItem
     from botcraft.config import ConfigManager
@@ -224,7 +251,7 @@ def _config_permissions(runtime):
             'Default preference lookup inserted a persistent record')
 
 
-def _text_models(runtime):
+def _text_models(runtime: Runtime) -> None:
     from botcraft.message.qtext.keyboard import (
         QKeyboardTemplate, QKeyboardPermission, QKeyboardPermissionType, QKeyboardCustom,
         QKeyboardButton, QKeyboardRenderData, QKeyboardActionCallback, QKeyboardModal,
@@ -307,7 +334,7 @@ def _text_models(runtime):
     require(private_source.conversation == 'private-route', 'C2C source followed mutated model routing')
 
 
-def _translations(runtime):
+def _translations(runtime: Runtime) -> None:
     from botcraft.message.qtext.text import QText, QMarkdown
     from botcraft.message.qtext.keyboard import QKeyboardTemplate
     translator = runtime.translation_manager
@@ -342,7 +369,7 @@ def _translations(runtime):
             'Lazy translation concatenation lost Markdown promotion or escaped plain prefix')
 
 
-def _plugin_registry_commands(runtime, paths):
+def _plugin_registry_commands(runtime: Runtime, paths: Mapping[str, Path]) -> None:
     from mcdreforged.plugin.operation_result import PluginResultType
     from botcraft.plugin.plugin_event import LiteralEvent
     from botcraft.plugin.si.server_interface import QQServerInterface
@@ -415,7 +442,7 @@ def _plugin_registry_commands(runtime, paths):
             'Failed isolated plugin load disturbed valid records')
 
 
-def _executors_context(runtime):
+def _executors_context(runtime: Runtime) -> None:
     from botcraft.plugin.si.server_interface import QQServerInterface
     from mcdreforged.plugin.si.server_interface import ServerInterface
     manager = runtime.plugin_manager
@@ -432,7 +459,11 @@ def _executors_context(runtime):
     require(solo.server_interface.schedule_task(lambda: QQServerInterface.psi_opt()).result(timeout=_TIMEOUT) is None,
             'Calling a bound plugin interface gave scheduled work an invented context')
 
-    async def context_probe():
+    async def context_probe() -> int:
+        """Exercise nested asynchronous plugin context restoration.
+        
+        :return: Computed result delivered through the asynchronous executor.
+        """
         require(runtime.async_task_executor.is_on_thread(), 'Coroutine executed outside actual async executor')
         with manager.with_plugin_context(solo):
             await asyncio.sleep(0)
@@ -443,15 +474,27 @@ def _executors_context(runtime):
         require(QQServerInterface.psi_opt() is None, 'Async context leaked after scope')
         return 42
     require(runtime.server_interface.schedule_task(context_probe()).result(timeout=_TIMEOUT) == 42, 'Async task did not deliver its computed result')
-    async def concurrent_contexts():
+    async def concurrent_contexts() -> list[str]:
+        """Exercise isolated plugin contexts in concurrent coroutines.
+        
+        :return: Plugin identifiers observed by both coroutines.
+        """
         entered = asyncio.Event()
         release = asyncio.Event()
-        async def first():
+        async def first() -> str:
+            """Observe the first concurrent coroutine plugin context.
+            
+            :return: Identifier of the first coroutine plugin.
+            """
             with manager.with_plugin_context(solo):
                 entered.set()
                 await release.wait()
                 return QQServerInterface.psi().get_self_metadata().id
-        async def second():
+        async def second() -> str:
+            """Observe the second concurrent coroutine plugin context.
+            
+            :return: Identifier of the second coroutine plugin.
+            """
             await entered.wait()
             with manager.with_plugin_context(directory):
                 release.set()
@@ -462,16 +505,28 @@ def _executors_context(runtime):
             'Concurrent coroutine plugin contexts contaminated each other')
     require(runtime.server_interface.schedule_task(lambda: (runtime.sync_task_executor.is_on_thread(), 6 * 7)).result(timeout=_TIMEOUT) == (True, 42),
             'Sync task did not execute on its dedicated executor')
-    def failed_task():
+    def failed_task() -> NoReturn:
+        """Raise a failure for synchronous executor propagation.
+        
+        :raises ValueError: Inject the expected synchronous capability failure.
+        """
         raise ValueError('capability-task-error')
     failure = runtime.server_interface.schedule_task(failed_task)
     rejects(ValueError, lambda: failure.result(timeout=_TIMEOUT), 'Sync executor swallowed a task exception')
-    async def failed_coroutine():
+    async def failed_coroutine() -> NoReturn:
+        """Raise a failure for asynchronous executor propagation.
+        
+        :raises ValueError: Inject the expected asynchronous capability failure.
+        """
         await asyncio.sleep(0)
         raise ValueError('capability-coroutine-error')
     failure = runtime.server_interface.schedule_task(failed_coroutine())
     rejects(ValueError, lambda: failure.result(timeout=_TIMEOUT), 'Async executor swallowed a coroutine exception')
-    async def prohibited_language_scope():
+    async def prohibited_language_scope() -> None:
+        """Exercise rejection of a language scope spanning an await.
+        
+        :return: No value is returned.
+        """
         with runtime.translation_manager.language_context('en_us'):
             await asyncio.sleep(0)
             runtime.translation_manager.tr('cap_solo.format', 'crossed-await', allow_failure=False)
@@ -480,7 +535,7 @@ def _executors_context(runtime):
     require(ServerInterface.get_instance() is None, 'BotCraft changed the native MCDR singleton')
 
 
-def _reload_unload(runtime, paths):
+def _reload_unload(runtime: Runtime, paths: Mapping[str, Path]) -> None:
     from mcdreforged.plugin.operation_result import PluginResultType
     from mcdreforged.utils.exception import IllegalStateError
     from botcraft.plugin.si.server_interface import QQServerInterface
@@ -542,7 +597,11 @@ def _reload_unload(runtime, paths):
     require([row for row in _journal() if row[0] == 'command'] == before, 'Unloaded command was still executable')
 
 
-def run_probes():
+def run_probes() -> dict[str, bool | str]:
+    """Exercise packaged capabilities in a temporary local runtime.
+    
+    :return: Clean success report or failure stage and diagnostic traceback.
+    """
     stage = 'temporary-resources'
     runtime = None
     original_cwd = Path.cwd()
@@ -602,7 +661,11 @@ def run_probes():
         os.chdir(original_cwd)
 
 
-def main():
+def main() -> int:
+    """Print the capability report for the isolated subprocess caller.
+    
+    :return: Zero for a cleaned success report, otherwise one.
+    """
     report = run_probes()
     print(_REPORT_PREFIX + json.dumps(report, ensure_ascii=True), flush=True)
     return 0 if report['ok'] else 1

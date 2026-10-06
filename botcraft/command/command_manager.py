@@ -1,4 +1,11 @@
 """Native command registration/traversal adapted to real QQ sources and scope."""
+from __future__ import annotations
+from typing import Any, TYPE_CHECKING
+from typing_extensions import Self
+from botcraft.message.qtext.text import QTextBase
+
+if TYPE_CHECKING:
+    from botcraft.runtime import Runtime
 import collections
 from mcdreforged.command.command_manager import CommandManager as NativeCommandManager, TraversePurpose
 from mcdreforged.command.builder import command_builder_utils as utils
@@ -10,33 +17,57 @@ from botcraft.command.command_source import QQCommandSource, ConsoleSource
 from mcdreforged.plugin.type.common import PluginState
 
 
+
+
 class CommandManager(NativeCommandManager):
-    def __init__(self, runtime):
+    def __init__(self: Self, runtime: Runtime) -> None:
+        """Initialize native command traversal for a BotCraft runtime.
+        
+        :param runtime: Runtime providing plugins, translations and logging.
+        :return: No value is returned.
+        """
         self.runtime = runtime
         self.logger = runtime.logger
         self.root_nodes = collections.defaultdict(list)
         self._CommandManager__preserve_command_error_display_flag = False
 
-    def matches_root(self, command):
+    def matches_root(self: Self, command: str) -> bool:
+        """Determine whether a command begins with a registered QQ root.
+        
+        :param command: Command text to inspect.
+        :return: Whether the first command element has registered roots.
+        """
         return utils.get_element(command) in self.root_nodes
 
-    def execute_command(self, command, source):
+    def execute_command(self: Self, command: str, source: QQCommandSource) -> None:
+        """Execute a registered command using a real QQ source.
+        
+        :param command: Command text to parse.
+        :param source: QQ command source owned by this runtime.
+        :return: No value is returned.
+        """
         if not isinstance(command, str):
             raise TypeError('command must be str')
         self._check_source(source)
         return self._traverse(command, source, TraversePurpose.EXECUTE)
 
-    def suggest_command(self, command, source):
+    def suggest_command(self: Self, command: str, source: QQCommandSource) -> CommandSuggestions:
+        """Generate suggestions for registered QQ command roots.
+        
+        :param command: Partial command text to complete.
+        :param source: QQ command source owned by this runtime.
+        :return: Native command suggestions permitted for this source and scene.
+        """
         if not isinstance(command, str):
             raise TypeError('command must be str')
         self._check_source(source)
         return self._traverse(command, source, TraversePurpose.SUGGEST)
 
-    def _check_source(self, source):
+    def _check_source(self: Self, source: QQCommandSource) -> None:
         if not isinstance(source, QQCommandSource) or source._runtime is not self.runtime:
             raise TypeError('execute_command requires a real QQCommandSource from this Runtime')
 
-    def _format_error(self, error, source):
+    def _format_error(self: Self, error: CommandError, source: QQCommandSource | ConsoleSource) -> None:
         if error.is_handled():
             return
         key = 'mcdreforged.command_exception.' + string_utils.hump_to_underline(type(error).__name__)
@@ -51,9 +82,7 @@ class CommandManager(NativeCommandManager):
             self.logger.debug('Cannot translate command error %s', key)
         source.reply(QText(error.to_rtext().to_plain_text()))
 
-    def _traverse(self, command, source, purpose):
-        # Native traversal: first element lookup, per-root node entry, handled
-        # CommandError and CallbackError diagnostics. Only QQ scope is added.
+    def _traverse(self: Self, command: str, source: QQCommandSource, purpose: TraversePurpose) -> CommandSuggestions | None:
         roots = self.root_nodes.get(utils.get_element(command), [])
         suggestions = CommandSuggestions()
         if purpose is TraversePurpose.SUGGEST and not roots:
@@ -84,7 +113,14 @@ class CommandManager(NativeCommandManager):
         if purpose is TraversePurpose.SUGGEST:
             return suggestions
 
-    def execute_console(self, command, source):
+
+    def execute_console(self: Self, command: str, source: ConsoleSource) -> None:
+        """Execute a command in the built-in console administration tree.
+        
+        :param command: Administration command text to parse.
+        :param source: Console source owned by this runtime.
+        :return: No value is returned.
+        """
         if not isinstance(source, ConsoleSource) or source._runtime is not self.runtime:
             raise TypeError('Console execution requires this Runtime console source')
         node = self.runtime.builtin_command_root

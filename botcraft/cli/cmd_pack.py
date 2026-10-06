@@ -5,6 +5,9 @@ changes that one dependency for this callable only: the native module, constants
 and every other caller remain untouched. Ignore traversal, Metadata, resources,
 requirements, archive naming and shebang handling all remain native.
 """
+from os import PathLike
+from typing import Callable, Iterable
+from typing_extensions import Self
 import json
 from pathlib import Path
 from types import FunctionType, SimpleNamespace
@@ -18,11 +21,22 @@ from botcraft.constants import plugin_constant
 
 
 class _InputRelativeIgnore:
-    def __init__(self, spec, root):
+    def __init__(self: Self, spec: pathspec.PathSpec, root: Path) -> None:
+        """Bind native ignore matching to a resolved plugin input root.
+        
+        :param spec: Compiled gitignore matcher.
+        :param root: Plugin input directory.
+        :return: No return value.
+        """
         self.spec = spec
         self.root = root.resolve()
 
-    def match_file(self, path):
+    def match_file(self: Self, path: str | PathLike[str]) -> bool:
+        """Match a file or directory using an input-root-relative ignore path.
+        
+        :param path: Candidate file or directory path.
+        :return: Result of the operation.
+        """
         candidate = Path(path)
         relative = candidate.resolve().relative_to(self.root).as_posix()
         if candidate.is_dir():
@@ -30,11 +44,11 @@ class _InputRelativeIgnore:
         return self.spec.match_file(relative)
 
 
-def _bind_native_packer(input_dir: Path):
-    def from_lines(lines):
+def _bind_native_packer(input_dir: Path) -> Callable[..., None]:
+    def from_lines(lines: Iterable[str]) -> _InputRelativeIgnore:
         return _InputRelativeIgnore(pathspec.GitIgnoreSpec.from_lines(lines), input_dir)
 
-    def load_ignore(path, writeln):
+    def load_ignore(path: Path, writeln: Callable[[str], object]) -> _InputRelativeIgnore:
         spec = read_ignore_file(path, writeln)
         return _InputRelativeIgnore(spec if spec is not None else pathspec.GitIgnoreSpec.from_lines([]), input_dir)
 
@@ -48,6 +62,12 @@ def _bind_native_packer(input_dir: Path):
 
 
 def make_packed_plugin(args: PackArgs, *, quiet: bool = False) -> None:
+    """Package a validated BotCraft plugin using native MCDR archive conventions.
+    
+    :param args: Native packaging options for input, output, archive naming and ignores.
+    :param quiet: Whether to suppress native packaging progress output.
+    :return: No return value.
+    """
     # Native mkdir is non-recursive; a deployment output may have missing parents.
     if not Path(args.input).is_dir():
         raise NotADirectoryError(args.input)

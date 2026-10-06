@@ -4,21 +4,40 @@ import copy
 import threading
 from contextlib import contextmanager
 from importlib.resources import files
+from typing import TYPE_CHECKING, Iterator, TypeAlias
+from typing_extensions import Self
 
 from mcdreforged.translation.language_fallback_handler import LanguageFallbackHandler
 from mcdreforged.translation.translation_manager import TranslationManager as NativeTranslationManager
 from mcdreforged.utils import translation_utils
 
 from botcraft.config import load_resource_yaml
+from botcraft.message.qtext.text import QTextBase, QText, QMarkdown, escape_markdown
+
+if TYPE_CHECKING:
+    from botcraft.runtime import Runtime
+    from botcraft.translation.translation_text import QQTranslationText
+
+TranslationParameter: TypeAlias = str | int | float | bool | None | QTextBase
+TranslationOption: TypeAlias = TranslationParameter | LanguageFallbackHandler
 
 
 class TranslationManager(NativeTranslationManager):
-    def __init__(self, runtime):
+    def __init__(self: Self, runtime: 'Runtime') -> None:
+        """Bind translation lookup to a standalone runtime.
+        
+        :param runtime: Runtime supplying the logger, language and plugin translations.
+        :return: Initialize the manager without loading plugin translations.
+        """
         super().__init__(runtime.logger)
         self.runtime = runtime
         self._tls = threading.local()
 
-    def load_translations(self):
+    def load_translations(self: Self) -> None:
+        """Load native and bundled BotCraft language resources.
+        
+        :return: Update the manager's translation storage and available languages.
+        """
         # Reused native managers and plugins retain their native translated log keys.
         super().load_translations()
         for resource in files('botcraft').joinpath('resources/lang').iterdir():
@@ -27,7 +46,7 @@ class TranslationManager(NativeTranslationManager):
                 translation_utils.update_storage(self.translations, language, load_resource_yaml('resources/lang/' + resource.name))
                 self.available_languages.add(language)
 
-    def _current_language(self):
+    def _current_language(self: Self) -> str:
         context = getattr(self._tls, 'context', None)
         if context is not None:
             if context['suspended']:
@@ -36,7 +55,12 @@ class TranslationManager(NativeTranslationManager):
         return self.language
 
     @contextmanager
-    def language_context(self, language):
+    def language_context(self: Self, language: str | None) -> Iterator[None]:
+        """Temporarily select the language for synchronous translation.
+        
+        :param language: Language code, or None to use the configured runtime language.
+        :return: Context manager restoring the previous language on exit; awaiting inside it is forbidden.
+        """
         if language is None:
             language = self.runtime.get_language()
         if not isinstance(language, str):
@@ -59,7 +83,7 @@ class TranslationManager(NativeTranslationManager):
                 handle.cancel()
             self._tls.context = previous
 
-    def _plugin_translations(self):
+    def _plugin_translations(self: Self) -> dict[str, dict[str, str]] | None:
         manager = getattr(self.runtime, 'plugin_manager', None)
         return manager.registry_storage.translations if manager is not None else None
 
@@ -124,6 +148,7 @@ class TranslationManager(NativeTranslationManager):
         if has_text:
             return QText(formatted, keyboard=copy.deepcopy(keyboard))
         return formatted
+
 
     def rtr(self, key, *args, **kwargs):
         from botcraft.translation.translation_text import QQTranslationText

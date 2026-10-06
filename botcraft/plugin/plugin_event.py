@@ -1,4 +1,5 @@
 """Native events/listeners with BotCraft lifecycle and canonical QQ IDs."""
+from typing_extensions import Self
 from mcdreforged.plugin.plugin_event import PluginEvent, LiteralEvent, MCDREvent, EventListener
 
 
@@ -19,20 +20,39 @@ class PluginEvents:
     INTERACTION = Event('interaction_create', 'on_interaction')
 
     @classmethod
-    def get_event_list(cls):
+    def get_event_list(cls: type[Self]) -> list[Event]:
+        """Return the known BotCraft lifecycle and QQ events.
+        
+        :return: Declared event objects in definition order.
+        """
         return [value for value in vars(cls).values() if isinstance(value, Event)]
 
     @classmethod
-    def get_event(cls, event_id):
+    def get_event(cls: type[Self], event_id: str) -> PluginEvent:
+        """Resolve a known event or construct a canonical literal event.
+        
+        :param event_id: Event identifier to normalize.
+        :return: Known event object or a literal event for the normalized identifier.
+        """
         canonical = normalize_event_id(event_id)
         return next((event for event in cls.get_event_list() if event.id == canonical), LiteralEvent(canonical))
 
     @classmethod
-    def is_known_event(cls, event_id):
+    def is_known_event(cls: type[Self], event_id: str) -> bool:
+        """Determine whether an identifier names a declared BotCraft event.
+        
+        :param event_id: Event identifier to normalize.
+        :return: Whether the canonical identifier belongs to a declared event.
+        """
         return any(event.id == normalize_event_id(event_id) for event in cls.get_event_list())
 
 
-def normalize_event_id(event):
+def normalize_event_id(event: PluginEvent | str) -> str:
+    """Normalize lifecycle aliases and QQ event identifiers.
+    
+    :param event: Event object or nonempty identifier.
+    :return: Lowercase identifier with native lifecycle aliases mapped to BotCraft.
+    """
     value = event.id if isinstance(event, PluginEvent) else event
     if not isinstance(value, str) or not value:
         raise TypeError('event must be PluginEvent or non-empty str')

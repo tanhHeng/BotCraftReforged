@@ -1,5 +1,7 @@
 """Help-driven global group/c2c panels with coalesced, evidence-aware reconciliation."""
 import asyncio
+from collections.abc import Sequence
+from concurrent.futures import Future
 from dataclasses import dataclass, replace
 from enum import Enum
 import json
@@ -7,10 +9,19 @@ import os
 from pathlib import Path
 from threading import RLock
 import time
+from typing import TYPE_CHECKING, TypeAlias
+from typing_extensions import Self
 
 from mcdreforged.utils.translation_utils import translate_from_dict
 from botcraft.network.exception import NetworkError, ResultUnknownError
 from botcraft.utils.future_utils import report_error
+from botcraft.message.user import Scene
+from botcraft.translation.translation_text import QQTranslationText
+
+if TYPE_CHECKING:
+    from botcraft.runtime import Runtime
+
+PanelItem: TypeAlias = tuple[str, str, bool]
 
 
 class PanelState(str, Enum):
@@ -41,7 +52,13 @@ class PanelStatus:
 class PanelSynchronizer:
     SCOPES = ('group', 'c2c')
 
-    def __init__(self, runtime, path='config/botcraft/panels.json'):
+    def __init__(self: Self, runtime: 'Runtime', path: str | Path = 'config/botcraft/panels.json') -> None:
+        """Initialize help-driven global group and C2C panel reconciliation.
+        
+        :param runtime: Runtime providing help metadata, language and the panel API client.
+        :param path: File storing reconciliation records.
+        :return: Initialize panel state without performing remote operations.
+        """
         self.runtime = runtime
         self.path = Path(path)
         self._lock = RLock()
@@ -57,7 +74,12 @@ class PanelSynchronizer:
         self._initialized = False
         self._delay_notice = None
 
-    def get_status(self, scope):
+    def get_status(self: Self, scope: str | Scene) -> PanelStatus:
+        """Read an immutable snapshot of one conversation panel's status.
+        
+        :param scope: Group or C2C conversation scope.
+        :return: Current desired and confirmed versions, state and error details.
+        """
         scope = getattr(scope, 'value', scope)
         with self._lock:
             if scope not in self._status:
@@ -65,14 +87,14 @@ class PanelSynchronizer:
             return self._status[scope]
 
     @staticmethod
-    def _field(text, name, maximum):
+    def _field(text: str, name: str, maximum: int) -> str:
         if not isinstance(text, str) or not text or len(text) > maximum:
             raise ValueError(f'panel {name} must contain 1..{maximum} characters')
         if any(ord(char) < 32 or ord(char) == 127 for char in text):
             raise ValueError(f'panel {name} contains control characters')
         return text
 
-    def _capture(self):
+    def _capture(self: Self) -> None:
         with self._capture_lock:
             self._capture_locked()
 
@@ -126,11 +148,11 @@ class PanelSynchronizer:
                     self._retry_at.pop(scope, None)
 
     @staticmethod
-    def _payload(items):
+    def _payload(items: Sequence[PanelItem]) -> list[dict[str, str | bool]]:
         return [{'type': 'command', 'name': name, 'desc': desc, 'only_admin': admin}
                 for name, desc, admin in items]
 
-    def _failure(self, scope, error):
+    def _failure(self: Self, scope: str, error: Exception) -> None:
         with self._lock:
             status = self._status[scope]
             unknown = isinstance(error, ResultUnknownError)
@@ -140,7 +162,7 @@ class PanelSynchronizer:
                                           reason=str(error), next_sync_at=None)
         self._persist()
 
-    def _persist(self):
+    def _persist(self: Self) -> None:
         with self._lock:
             data = {'appid': self.runtime.get_config().appid, 'scopes': {
                 scope: {'panel_id': status.panel_id, 'state': status.state.value,
@@ -155,7 +177,11 @@ class PanelSynchronizer:
         except OSError as error:
             self.runtime.logger.warning('Cannot persist panel reconciliation records: %s', type(error).__name__)
 
-    async def rebuild(self):
+    async def rebuild(self: Self) -> None:
+        """Rebuild both global panels from current registered help metadata.
+        
+        :return: Replace remote startup panels and record confirmed versions; failures propagate.
+        """
         if self._rebuild_started or self._closed:
             raise RuntimeError('Panel startup rebuild may run only once')
         self._rebuild_started = True
@@ -198,7 +224,11 @@ class PanelSynchronizer:
             self._persist()
         self._initialized = True
 
-    def schedule_sync(self):
+    def schedule_sync(self: Self) -> None:
+        """Capture current help and schedule coalesced panel synchronization.
+        
+        :return: Start reconciliation after initialization unless the synchronizer is closed.
+        """
         if self._closed:
             return
         self._capture()
@@ -210,13 +240,13 @@ class PanelSynchronizer:
                     self._status[scope] = replace(status, state=PanelState.PENDING)
             self._ensure_worker()
 
-    def _ensure_worker(self):
+    def _ensure_worker(self: Self) -> None:
         if self._closed or (self._worker is not None and not self._worker.done()):
             return
         self._worker = self.runtime.network_loop.submit(self._sync(), operation='panel synchronization')
         self._worker.add_done_callback(self._worker_done)
 
-    def _worker_done(self, future):
+    def _worker_done(self: Self, future: Future[None]) -> None:
         with self._lock:
             if self._worker is not future:
                 return
@@ -227,7 +257,7 @@ class PanelSynchronizer:
             if pending and not self._closed:
                 self._ensure_worker()
 
-    async def _sync(self):
+    async def _sync(self: Self) -> None:
         api = self.runtime.api_client
         while not self._closed:
             with self._lock:
@@ -286,7 +316,11 @@ class PanelSynchronizer:
                                                   trace_id=None, next_sync_at=None)
             self._persist()
 
-    async def close(self):
+    async def close(self: Self) -> None:
+        """Persist panel state and wait briefly for in-flight synchronization.
+        
+        :return: Stop scheduling work without blindly deleting remote panels.
+        """
         self._closed = True
         self._persist()
         # No blind remote cleanup on process exit. In-flight HTTP keeps its real outcome.

@@ -1,4 +1,6 @@
 """Prepare local deployment files without creating a Runtime or opening a connection."""
+from typing import Any
+from botcraft.config import Config
 import logging
 from importlib.resources import files
 from pathlib import Path
@@ -22,13 +24,22 @@ def _write_template(path: str, resource: str, *, overwrite: bool) -> bool:
 
 
 def generate_default(args: RuntimeArgs) -> None:
-    """Explicitly replace the selected configuration and permission files."""
+    """Explicitly replace selected configuration and permission files with bundled defaults.
+    
+    :param args: Deployment paths and initialization options.
+    :return: No return value.
+    """
     _write_template(args.config_file_path, 'default_config.yml', overwrite=True)
     _write_template(args.permission_file_path, 'default_permission.yml', overwrite=True)
 
 
-def read_validated_config(path: str, *, logger=None):
-    """Read and validate without missing-option repair or any disk writes."""
+def read_validated_config(path: str, *, logger: logging.Logger | None = None) -> tuple[dict[str, Any], Config]:
+    """Read and validate configuration without repair or disk writes.
+    
+    :param path: Configuration YAML file to read.
+    :param logger: Validation logger, or a bootstrap logger when omitted.
+    :return: Original YAML mapping and the validated configuration.
+    """
     from botcraft.config import ConfigManager
     with open(path, encoding='utf8') as stream:
         try:
@@ -41,7 +52,11 @@ def read_validated_config(path: str, *, logger=None):
 
 
 def initialize_environment(args: RuntimeArgs) -> None:
-    """Create missing files and configured plugin/data/log directories only."""
+    """Create missing deployment files and configured plugin, data and log directories.
+    
+    :param args: Deployment paths and initialization options.
+    :return: No return value.
+    """
     _write_template(args.config_file_path, 'default_config.yml', overwrite=False)
     _write_template(args.permission_file_path, 'default_permission.yml', overwrite=False)
     _, config = read_validated_config(args.config_file_path)
@@ -50,7 +65,11 @@ def initialize_environment(args: RuntimeArgs) -> None:
 
 
 def prepare_environment(args: RuntimeArgs) -> None:
-    """Refuse incomplete deployments unless auto-init was explicitly selected."""
+    """Require deployment files unless automatic initialization was selected.
+    
+    :param args: Deployment paths and initialization options.
+    :return: No return value.
+    """
     if args.auto_init:
         initialize_environment(args)
     for label, path in (('configuration', args.config_file_path), ('permission', args.permission_file_path)):
