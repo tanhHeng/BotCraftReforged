@@ -88,4 +88,6 @@ class EventDispatcher:
         manager.dispatch_event(PluginEvents.QQ_EVENT, (event,))
         if isinstance(event, QQMessageReceived):
             manager.dispatch_event(PluginEvents.MESSAGE, (event,))
+            if event.event_type in ('GROUP_AT_MESSAGE_CREATE', 'GROUP_MESSAGE_CREATE'):
+                manager.dispatch_event(PluginEvents.GROUP_MESSAGE, (event,))
         manager.dispatch_event(normalize_event_id(event.event_type), (event,), exclude_legacy=event.model_parse_failed)

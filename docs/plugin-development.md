@@ -123,14 +123,27 @@ async def reply_result(source):
 | `on_botcraft_stop(server)` | 曾达到 READY 的实例开始正常停止；不是任意加载失败的清理钩子。 |
 | `on_qq_event(server, event)` | 通用 `QQEvent` 平台事件。 |
 | `on_message(server, event)` | `QQMessageReceived` 群聊/C2C 消息。 |
-| `on_group_at_message(server, event)` | 群 AT 消息。 |
-| `on_group_message(server, event)` | 普通群消息。 |
+| `on_group_message(server, event)` | 两种群消息投递：`GROUP_AT_MESSAGE_CREATE` 和 `GROUP_MESSAGE_CREATE`。 |
 | `on_c2c_message(server, event)` | C2C 消息。 |
 | `on_interaction(server, event)` | `QQInteraction` 交互事件。 |
 
 也可在 `on_load` 中调用 `server.register_event_listener('c2c_message_create', callback)` 显式注册，事件 ID 不区分大小写；回调仍接收 `(server, event)`。同一处理不要同时用自动回调和显式登记，否则可能重复响应。
 
 `botcraft.api.event` 导出 `Event`、`PluginEvents` 和原生 `PluginEvent`/`LiteralEvent`，以及 QQ 入站类型 `QQEvent`、`QQInteraction`、`QQMessageReceived`。登记平台事件通常直接使用官方事件名字符串；本地自定义事件使用 `LiteralEvent('my_plugin.event')`，不属于 `on_qq_event` 的平台推送范围。
+
+`on_group_message` 登记到框架事件 `botcraft.group_message`，不合并两个官方事件 ID。消息安排顺序为命令处理、`on_qq_event`、`on_message`、群消息统一回调、官方类型精确监听；C2C 保持原专用回调。各入口共享对象，不保证异步完成顺序。解析失败不调用消息类回调，仍交付全局及官方精确监听。
+
+旧默认方法 `on_group_at_message` 已移除，无兼容别名；只处理平台 AT 投递的插件应改用以下精确订阅。全量事件也可能包含机器人提及，官方事件类型不等同于正文是否包含 AT。
+
+```python
+from botcraft.api.decorator import qq_event_listener
+
+@qq_event_listener('GROUP_AT_MESSAGE_CREATE')
+def handle_at_delivery(server, event):
+    server.logger.info('Received platform AT delivery')
+```
+
+也支持自动发现 `on_group_at_message_create_event` 或显式登记官方事件名。精确监听仍接收同一个类型化消息，不是另一个原始 JSON 通道。统一回调与精确监听同时登记会分别调用；不要重复执行相同副作用。
 
 `QQEvent` 提供 `event_type`、`event_id`、`sequence`、`raw_payload`、`data`、`model_parse_failed` 和 `parse_error`。`data` 是可编辑 JSON 视图，与保留原接收事实的 `raw_payload` 分开；不要修改 `raw_payload` 来改变身份、路由或被动回复资格。消息的结构化内容在 `event.message_data`。群 AT 空格处理只影响该正文视图，不改 `data` 或原始响应日志。
 

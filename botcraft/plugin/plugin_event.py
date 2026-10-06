@@ -14,8 +14,7 @@ class PluginEvents:
     BOTCRAFT_STOP = Event('botcraft.stop', 'on_botcraft_stop')
     QQ_EVENT = Event('botcraft.qq_event', 'on_qq_event')
     MESSAGE = Event('botcraft.message', 'on_message')
-    GROUP_AT_MESSAGE = Event('group_at_message_create', 'on_group_at_message')
-    GROUP_MESSAGE = Event('group_message_create', 'on_group_message')
+    GROUP_MESSAGE = Event('botcraft.group_message', 'on_group_message')
     C2C_MESSAGE = Event('c2c_message_create', 'on_c2c_message')
     INTERACTION = Event('interaction_create', 'on_interaction')
 
@@ -44,7 +43,9 @@ class PluginEvents:
         :param event_id: Event identifier to normalize.
         :return: Whether the canonical identifier belongs to a declared event.
         """
-        return any(event.id == normalize_event_id(event_id) for event in cls.get_event_list())
+        canonical = normalize_event_id(event_id)
+        return canonical in ('group_at_message_create', 'group_message_create') or any(
+            event.id == canonical for event in cls.get_event_list())
 
 
 def normalize_event_id(event: PluginEvent | str) -> str:
