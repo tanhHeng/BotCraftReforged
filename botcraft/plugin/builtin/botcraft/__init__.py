@@ -7,7 +7,8 @@ from typing import Any
 from mcdreforged.command.builder.common import CommandContext
 from mcdreforged.command.builder.nodes.basic import AbstractNode
 from botcraft.plugin.si.plugin_server_interface import QQPluginServerInterface
-from botcraft.message.qtext.text import QText, QMarkdown
+from botcraft.message.qtext.text import QText, QMarkdown, QTextInput
+from botcraft.constants.core_constant import VERSION
 from botcraft.translation.translation_text import QQTranslationText
 from botcraft.translation.translation_manager import TranslationParameter
 from mcdreforged.command.builder.nodes.basic import Literal
@@ -52,10 +53,27 @@ def register(server: QQPluginServerInterface) -> Literal:
         :return: Whether the source is console or a configured super administrator.
         """
         return isinstance(src, ConsoleSource) or manager.is_super_admin(src)
+    def root_command(src: QQCommandSource | ConsoleSource) -> None:
+        """Reply with the framework version and registered command help inputs.
+
+        :param src: Invoking QQ or console source.
+        :return: No value is returned.
+        """
+        message = QMarkdown(tr(src, 'help.version', VERSION))
+        for help_ in runtime.plugin_manager.registry_storage.help_messages:
+            if src.has_permission(help_.permission) and (not isinstance(src, QQCommandSource) or src.scene in help_.scope):
+                description = help_.message
+                if isinstance(description, dict):
+                    from mcdreforged.utils.translation_utils import translate_from_dict
+                    from mcdreforged.translation.language_fallback_handler import LanguageFallbackHandler
+                    description = translate_from_dict(description, src.get_preference().language, fallback_handler=LanguageFallbackHandler.auto())
+                description = runtime.translation_manager.evaluate(description, language=src.get_preference().language)
+                message.append('\n', QTextInput(help_.prefix, show=help_.prefix), f' - {description}')
+        src.reply(message)
 
     def help_command(src: QQCommandSource | ConsoleSource) -> None:
         """Reply with help visible in the invoking scene and language.
-        
+
         :param src: Invoking QQ or console source.
         :return: No value is returned.
         """
@@ -70,7 +88,7 @@ def register(server: QQPluginServerInterface) -> Literal:
                 message = runtime.translation_manager.evaluate(message, language=src.get_preference().language)
                 lines.append(f'{help_.prefix}: {message}')
         src.reply('\n'.join(lines) or rtr('help.empty'))
-    root.runs(help_command)
+    root.runs(root_command)
     root.then(Literal('help').runs(help_command))
 
     def choose_target(src: QQCommandSource | ConsoleSource, target: str | None = None) -> User:

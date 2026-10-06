@@ -19,6 +19,7 @@ botcraft:
     preference: 'Preferences reloaded.'
     failed: 'Reload failed; the previous effective configuration is unchanged.'
   help:
+    version: 'BotCraft version {0}'
     description: 'Show help'
     title: 'BotCraft command help'
     empty: 'No command help is available.'

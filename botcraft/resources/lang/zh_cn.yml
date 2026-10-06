@@ -19,6 +19,7 @@ botcraft:
     preference: '偏好已重新加载。'
     failed: '重新加载失败，原有效配置未改变。'
   help:
+    version: 'BotCraft 版本 {0}'
     description: '查询帮助'
     title: 'BotCraft 指令帮助'
     empty: '没有可用的指令帮助。'
