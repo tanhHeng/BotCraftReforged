@@ -210,6 +210,26 @@ def on_load(server: QQPluginServerInterface, prev_module: ModuleType | None) -> 
 
 `botcraft.api.qtext` 也导出 `tr`、`rtr`，调用需要运行中的接口。缺少键默认记录英文错误并显示键，`allow_failure=False` 抛出 `KeyError`。插件硬编码日志、异常和注释使用英文，中文用户反馈通过翻译键提供。
 
+## 文本交互
+
+`botcraft.api.qtext` 导出 `QTextAt` 和 `QTextInput`，支持直接发送、加法组合以及 `tr/rtr` 格式化参数。普通字符串始终按文本处理，不因包含类似标签而获得交互能力；交互对象的标签在 Markdown 提升、复制和延迟翻译中保留。
+
+- `QTextAt(target)`：target 为 `User` 或明确的提及 ID 字符串；User 使用 `member_openid`，缺失拒绝，不回退 `User.id` 或昵称。群聊文本及 Markdown 支持，首期不包含 @全体成员。
+- `QTextInput(text, *, show=None, reference=False)`：仅 Markdown；text/show 接收未编码字符串，按编码前 Unicode 字符数限制为最多 100，再 URL 编码一次。show=None 省略，reference 必须为 bool，控制客户端填入输入框时的回复引用，不等同于发送接口 refer_msg。
+- str/QText 与 QTextInput 加法组合自动提升 QMarkdown 并发出 UserWarning；显式 QMarkdown 组合不警告。QText.append(QTextInput) 拒绝且不改变原对象，应使用加法或 QMarkdown。
+- 键盘仍最多一个，复制隔离键盘，失败追加保持原内容。直接重新赋值 `.text` 会按新的普通文本重建 Markdown 视图，不保留旧交互片段身份。
+
+```python
+from botcraft.api.qtext import QTextAt, QTextInput, QMarkdown
+
+message = QMarkdown('**请选择：** ').append(
+    QTextAt('actual_member_openid'), ' ',
+    QTextInput('/echo 编辑内容', show='编辑后发送', reference=True),
+)
+```
+
+协议依据为本地 `reference/qq_docs/server-inter/message/trans/text-chain.md`。100 字符按编码前长度校验属于本库选择；客户端展示、点击填入和引用效果仍取决于 QQ 平台支持。
+
 ## Markdown 与键盘
 
 下面是可独立运行的离线烟测示例，不需要机器人凭据：

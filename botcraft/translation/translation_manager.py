@@ -152,7 +152,7 @@ class TranslationManager(NativeTranslationManager):
             value = resolved[id(value)]
             if isinstance(value, QTextBase):
                 text = value.to_plain_text()
-                return escape_markdown(text) if has_markdown and not isinstance(value, QMarkdown) else text
+                return value._as_markdown() if has_markdown else text
             if has_markdown and isinstance(value, str):
                 return escape_markdown(value)
             return value
@@ -164,7 +164,21 @@ class TranslationManager(NativeTranslationManager):
         if has_markdown:
             return QMarkdown(formatted, keyboard=copy.deepcopy(keyboard))
         if has_text:
-            return QText(formatted, keyboard=copy.deepcopy(keyboard))
+            result = QText(formatted, keyboard=copy.deepcopy(keyboard))
+            from string import Formatter
+            class MarkdownFormatter(Formatter):
+                def parse(self, template):
+                    for literal, field, spec, conversion in super().parse(template):
+                        yield escape_markdown(literal), field, spec, conversion
+                def format_field(self, value, spec):
+                    if isinstance(value, QTextBase):
+                        return value._as_markdown()
+                    return escape_markdown(super().format_field(value, spec))
+            markdown_formatted = formatter if missing_translation else MarkdownFormatter().vformat(
+                formatter, tuple(resolved[id(arg)] for arg in args),
+                {name: resolved[id(arg)] for name, arg in kwargs.items()})
+            result._remember_markdown(markdown_formatted)
+            return result
         return formatted
 
     def rtr(self: Self, key: str, *args: TranslationParameter, markdown: bool = False,

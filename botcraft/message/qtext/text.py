@@ -5,6 +5,10 @@ if TYPE_CHECKING:
     from botcraft.translation.translation_text import QQTranslationText
 import html
 import re
+import warnings
+import copy
+from urllib.parse import quote
+from botcraft.message.user import User
 from abc import ABC, abstractmethod
 
 from botcraft.message.qtext.keyboard import QKeyboardBase
@@ -99,13 +103,17 @@ class QTextBase(ABC):
         :param other: Supported concrete text or an existing delayed translation operand.
         :return: The combined message; delayed translation remains delayed.
         """
+        if isinstance(self, QTextInput) and isinstance(other, (str, QText)):
+            warnings.warn('QTextInput only supports Markdown; promoting plain text to QMarkdown', UserWarning, stacklevel=2)
         if isinstance(other, QTextBase) and hasattr(other, '_evaluate_translation'):
             return other.__radd__(self)
         if not isinstance(other, (str, QText, QMarkdown)):
             raise TypeError('Only str/QText/QMarkdown can be combined')
         if isinstance(self, QText) and isinstance(other, QMarkdown):
             keyboard = self.get_keyboard()
-            promoted = QMarkdown(escape_markdown(self.text), keyboard=keyboard.copy() if keyboard is not None else None)
+            if isinstance(other, QTextInput):
+                warnings.warn('QTextInput only supports Markdown; promoting plain text to QMarkdown', UserWarning, stacklevel=2)
+            promoted = QMarkdown(self._as_markdown(), keyboard=keyboard.copy() if keyboard is not None else None)
             return promoted.append(other)
         return self.copy().append(other)
 
@@ -128,15 +136,31 @@ class QTextBase(ABC):
             payload['keyboard'] = keyboard.to_payload()
         return payload
 
+    def _as_markdown(self: Self) -> str:
+        if isinstance(self, QMarkdown):
+            return self.text
+        if getattr(self, '_markup_source', None) == self.text:
+            return self._markdown_text
+        return escape_markdown(self.text)
+
+    def _remember_markdown(self: Self, rendered: str) -> None:
+        self._markup_source = self.text
+        self._markdown_text = rendered
+
     def _append_parts(self: Self, parts: "Sequence[str | QText | QMarkdown]", *, markdown: bool) -> Self:
         text = self.text
+        markdown_text = self._as_markdown()
         keyboard = self.get_keyboard()
         # Build everything first: failed later operands never partially mutate self.
         for part in parts:
             if isinstance(part, str):
                 text += escape_markdown(part) if markdown else part
+                markdown_text += escape_markdown(part)
+            elif isinstance(part, QTextInput) and not markdown:
+                raise TypeError('QTextInput only supports Markdown; use addition or QMarkdown')
             elif isinstance(part, QText) or (markdown and isinstance(part, QMarkdown)):
-                text += escape_markdown(part.text) if markdown and isinstance(part, QText) else part.text
+                text += part._as_markdown() if markdown else part.text
+                markdown_text += part._as_markdown()
                 right_keyboard = part.get_keyboard()
                 if right_keyboard is not None:
                     if keyboard is not None:
@@ -148,6 +172,8 @@ class QTextBase(ABC):
             keyboard.to_payload()
         self.text = text
         self._keyboard = keyboard
+        if not markdown:
+            self._remember_markdown(markdown_text)
         return self
 
 
@@ -167,7 +193,9 @@ class QText(QTextBase):
         :return: An independent message of the same concrete type.
         """
         keyboard = self.get_keyboard()
-        return type(self)(self.text, keyboard=keyboard.copy() if keyboard is not None else None)
+        result = type(self)(self.text, keyboard=keyboard.copy() if keyboard is not None else None)
+        result._remember_markdown(self._as_markdown())
+        return result
 
     def to_plain_text(self: Self) -> str:
         """Return the stored text representation without the keyboard.
@@ -219,3 +247,60 @@ class QMarkdown(QTextBase):
         if not isinstance(self.text, str):
             raise TypeError('QMarkdown text must be a string')
         return self._payload_with_keyboard({'msg_type': 2, 'markdown': {'content': self.text}})
+
+
+class QTextAt(QText):
+    """A user mention usable in plain text and Markdown messages."""
+
+    def __init__(self, target: User | str, *, keyboard: QKeyboardBase | None = None) -> None:
+        """Create a mention from a group member OpenID.
+
+        :param target: User with member_openid, or the explicit mention ID.
+        :param keyboard: Optional message keyboard.
+        :raises ValueError: The identity is missing or contains protocol delimiters.
+        """
+        identity = target.member_openid if isinstance(target, User) else target
+        if not isinstance(identity, str):
+            raise TypeError('Mention target must be User or a string ID')
+        if not identity or any(char in identity for char in '<>\r\n"&'):
+            raise ValueError('Invalid mention member_openid')
+        super().__init__(f'<qqbot-at-user id="{identity}" />', keyboard=keyboard)
+        self._remember_markdown(self.text)
+
+    def copy(self) -> "QTextAt":
+        """Copy the mention and its keyboard without reinterpreting its tag."""
+        return copy.deepcopy(self)
+
+
+class QTextInput(QMarkdown):
+    """Markdown interaction inserting editable text into the client's input box."""
+
+    def __init__(self, text: str, *, show: str | None = None, reference: bool = False,
+                 keyboard: QKeyboardBase | None = None) -> None:
+        """Create an input interaction, encoding raw attribute strings once.
+
+        :param text: Unencoded input text, at most 100 Unicode characters.
+        :param show: Optional unencoded label, at most 100 Unicode characters.
+        :param reference: Whether the client includes a reply reference.
+        :param keyboard: Optional message keyboard.
+        :raises ValueError: An attribute exceeds the character limit.
+        :raises TypeError: An attribute has an invalid type.
+        """
+        for name, value in (('text', text), ('show', show)):
+            if value is None and name == 'show':
+                continue
+            if not isinstance(value, str):
+                raise TypeError(f'{name} must be a string')
+            if len(value) > 100:
+                raise ValueError(f'{name} exceeds 100 characters before URL encoding')
+        if type(reference) is not bool:
+            raise TypeError('reference must be bool')
+        tag = f'<qqbot-cmd-input text="{quote(text, safe="")}"'
+        if show is not None:
+            tag += f' show="{quote(show, safe="")}"'
+        tag += f' reference="{str(reference).lower()}" />'
+        super().__init__(tag, keyboard=keyboard)
+
+    def copy(self) -> "QTextInput":
+        """Copy the interaction and its keyboard without encoding again."""
+        return copy.deepcopy(self)
