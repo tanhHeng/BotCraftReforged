@@ -1,0 +1,100 @@
+qq_jrrp:
+  panel_description: '查看今日人品与语录'
+  sentence: |-
+    {text}
+
+    —— {source}
+  submission_template: |-
+    /jrrp post
+    !文本
+    在此处填写文本 可换行
+    !出处
+    作者《出处》
+  submission_quotation: |-
+    > /jrrp post
+    > \!文本
+    > 在此处填写文本 可换行
+    > \!出处
+    > 作者《出处》
+  submission: |-
+    # 语录投稿
+
+    点击「投稿」将完整模板填入输入框，替换文本和出处后再发送。
+
+    {template}
+
+    文本可换行；文本和出处均不能为空。
+  help: |-
+    # 今日人品 · 帮助
+
+    - **/jrrp**：查看今日幸运指数与语录。
+    - **/jrrp post**：查看投稿格式，或点击「投稿」填写模板。
+    - **/jrrp withdraw**：撤回自己的最近一条投稿。
+    - **/jrrp help**：显示本帮助。
+
+    同一天的幸运指数固定，仅供娱乐。语录池不变时，最多随机到三句语录。
+  empty: '语录池为空，点击「投稿」分享一句语录。'
+  fortune: |-
+    # 今日人品 · {title}
+
+    **幸运指数：{score}%**
+
+    *{description}*
+
+    {date} · 仅供娱乐
+
+    ## 今日语录
+
+    {quotation}
+  date: '{year:04d}年{month:02d}月{day:02d}日'
+  post_invalid: |-
+    # 投稿参数错误
+
+    文本和出处均不能为空。
+
+    {instructions}
+  post_success: |-
+    # 投稿成功
+
+    {quotation}
+  withdraw_missing: |-
+    # 撤回失败
+
+    找不到自己的投稿。
+  withdraw_success: |-
+    # 撤回成功
+
+    {quotation}
+  arguments_invalid: |-
+    # 参数错误
+
+    请使用 /jrrp help。
+  storage_error: |-
+    # 语录数据读写失败
+
+    请联系管理员检查数据文件和目录权限。
+  buttons:
+    fortune: '今日运势'
+    help: '帮助'
+    submit: '投稿'
+    withdraw: '撤回投稿'
+    unsupported: '请升级 QQ，或手动发送 /jrrp help。'
+  categories:
+    great_luck:
+      title: '大吉'
+      description: '万事如意，一帆风顺 ~'
+    luck:
+      title: '吉'
+      description: '今天是幸运的一天！'
+    small_luck:
+      title: '末吉'
+      description: '每日小幸运(1/1)'
+    small_misfortune:
+      title: '末凶'
+      description: '好像有点小问题？'
+    misfortune:
+      title: '凶'
+      description: '嘶……问题不大(?)'
+    great_misfortune:
+      title: '大凶'
+      description: '开溜(逃)'

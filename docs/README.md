@@ -8,6 +8,7 @@
 2. [插件开发](plugin-development.md)：从命令插件开始，了解消息来源、事件、权限、翻译和键盘。
 3. [元数据与打包](packaging.md)：单文件、目录、压缩插件和分发命令。
 4. [Echo 示例](../example_plugins/echo.py)：可直接放入实例插件目录的单文件插件。
+5. [今日人品插件](jrrp-plugin.md)：完整目录插件，含 `/jrrp`、中文触发、语录投稿和命令按钮。
 
 [返回项目首页](../README.md)。
 

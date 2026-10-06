@@ -3,3 +3,4 @@ include botcraft/py.typed
 recursive-include botcraft/resources *.yml
 recursive-include docs *.md
 include example_plugins/echo.py
+recursive-include example_plugins/qq_jrrp *.py *.json *.yml LICENSE NOTICE

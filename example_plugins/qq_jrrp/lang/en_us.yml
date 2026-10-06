@@ -1,0 +1,100 @@
+qq_jrrp:
+  panel_description: 'Show daily fortune and a quote'
+  sentence: |-
+    {text}
+
+    — {source}
+  submission_template: |-
+    /jrrp post
+    !文本
+    Replace this with your quote; multiple lines are allowed
+    !出处
+    Author / source
+  submission_quotation: |-
+    > /jrrp post
+    > \!文本
+    > Replace this with your quote; multiple lines are allowed
+    > \!出处
+    > Author / source
+  submission: |-
+    # Submit a quote
+
+    Click “Submit” to insert the full template, replace the text and source, then send it.
+
+    {template}
+
+    Multiple lines are allowed. Both text and source must be non-empty.
+  help: |-
+    # Daily fortune · Help
+
+    - **/jrrp**: Show today's luck score and a quote.
+    - **/jrrp post**: Show the submission format, or click “Submit” to insert a template.
+    - **/jrrp withdraw**: Withdraw your most recent submission.
+    - **/jrrp help**: Show this help.
+
+    The score stays fixed throughout the local day and is just for fun. While the quote pool stays unchanged, there are at most three daily quote choices.
+  empty: 'The quote pool is empty. Click “Submit” to share a quote.'
+  fortune: |-
+    # Daily fortune · {title}
+
+    **Luck score: {score}%**
+
+    *{description}*
+
+    {date} · Just for fun
+
+    ## Today's quote
+
+    {quotation}
+  date: '{year:04d}-{month:02d}-{day:02d}'
+  post_invalid: |-
+    # Invalid submission
+
+    Both text and source must be non-empty.
+
+    {instructions}
+  post_success: |-
+    # Quote submitted
+
+    {quotation}
+  withdraw_missing: |-
+    # Withdrawal failed
+
+    No submission belonging to you was found.
+  withdraw_success: |-
+    # Quote withdrawn
+
+    {quotation}
+  arguments_invalid: |-
+    # Invalid arguments
+
+    Please use /jrrp help.
+  storage_error: |-
+    # Quote storage failed
+
+    Please ask an administrator to check the data file and directory permissions.
+  buttons:
+    fortune: 'Fortune'
+    help: 'Help'
+    submit: 'Submit'
+    withdraw: 'Withdraw'
+    unsupported: 'Please update QQ or send /jrrp help manually.'
+  categories:
+    great_luck:
+      title: 'Great luck'
+      description: 'Everything is going your way ~'
+    luck:
+      title: 'Luck'
+      description: 'Today is a lucky day!'
+    small_luck:
+      title: 'Small luck'
+      description: 'Daily little luck (1/1)'
+    small_misfortune:
+      title: 'Small misfortune'
+      description: 'Maybe a small problem?'
+    misfortune:
+      title: 'Misfortune'
+      description: 'Well… probably fine (?)'
+    great_misfortune:
+      title: 'Great misfortune'
+      description: 'Time to run away!'

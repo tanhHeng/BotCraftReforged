@@ -1,0 +1,72 @@
+# 今日人品插件
+
+[文档目录](README.md) · [插件开发](plugin-development.md) · [打包](packaging.md)
+
+[qq_jrrp 示例目录](../example_plugins/qq_jrrp/botcraft.plugin.json) 将原 LazyBot/NoneBot 今日人品插件迁移为 BotCraft 插件，使用 QQ Markdown、命令键盘和被动消息回复。原 LazyBot 代码与语录数据不修改、不自动导入。
+
+## 安装
+
+将整个 `example_plugins/qq_jrrp` 目录复制到运行实例配置的插件目录，保留 `botcraft.plugin.json`、`qq_jrrp/`、`lang/`、`LICENSE` 和 `NOTICE`，不要只复制入口 Python 文件。根目录 `lang/` 由 BotCraft 自动注册，不需要插件手动加载。在仓库根目录安装到已初始化的测试实例：
+
+```powershell
+Copy-Item -Recurse .\example_plugins\qq_jrrp .\test\plugins\qq_jrrp
+Set-Location .\test
+python -m botcraft start
+```
+
+已运行的实例可在运维控制台执行 `/botcraft plugin refresh` 加载新插件。仅登记一个 `/jrrp` 帮助/面板项，不自行创建或接管远端面板。不要同时加载 ID 为 `qq_jrrp` 的目录与压缩副本。
+
+## 查询与文字触发
+
+以下收到的消息等效于纯 `/jrrp` 查询：
+
+| 输入 | 支持的消息场景 |
+| --- | --- |
+| `/jrrp` | 群聊和 C2C；群 AT 消息会按框架规则去掉正文前导空格 |
+| `@机器人 今日人品` | 群 AT 消息，平台去掉提及后匹配正文 |
+| `今日人品` | 普通群消息、群 AT 和 C2C |
+| `#今日人品` | 普通群消息、群 AT 和 C2C |
+
+中文触发按整条真实正文匹配，忽略两端空白；不会匹配“看看今日人品”、附加参数、卡片、附件或引用内容中的词语。`/jrrp` 命令不会被消息监听重复响应。
+
+**无 AT 的群消息必须先由 QQ 平台推送 `GROUP_MESSAGE_CREATE`。** 若账号或群未开启接收所有消息，本地插件不能补收平台没有推送的消息。C2C 无需机器人提及。
+
+每个结果使用原消息 ID 发送被动回复。本次不实现引用展示：不需要 `msg_idx`，也不添加 `refer_msg` 或 `message_reference`。平台的被动回复时效、次数和 Markdown/键盘权限仍然适用。
+
+## 评分、语录与按钮
+
+- 每日评分沿用原算法：实际 `User.id` 和运行机器的本地日期共同决定结果；数字 ID 保留原数值种子，非数字 OpenID 使用 SHA-256。幸运指数为 0–100%，同一天同一身份固定。
+- 不推断群聊与 C2C 的不同 ID 是同一个用户。更换运行机器时区可能改变日期切换时间。
+- 初始语录池为空；已有语录池不变时，按旧算法最多选择三种每日候选语录。
+- 回复包含“今日运势”“帮助”“投稿”“撤回投稿”四个命令按钮。群聊按钮填入命令；C2C 运势/帮助按钮允许自动发送。投稿模板不自动发送，撤回按钮仅允许相应消息用户操作，服务端仍检查投稿者身份。
+- 用户可使用 `/botcraft pref language set en_us` 切换输出语言；中文和英文内容来自根目录 `lang/`。正文通过带插件命名空间的 `rtr` 封装延迟求值，键盘标签/模板在发送前生成字符串。代码注释、异常与硬编码日志使用英文。
+
+## 投稿与撤回
+
+```text
+/jrrp help
+/jrrp post
+/jrrp withdraw
+```
+
+`/jrrp post` 展示投稿方法。点击投稿按钮填入模板，或直接发送以下多行消息：
+
+```text
+/jrrp post
+!文本
+在此填写语录，可以换行
+!出处
+作者或出处
+```
+
+文本与出处均不能为空。`/jrrp withdraw` 撤回当前投稿者最近一条语录，不能撤回其他用户的投稿；输入相同 User.id 但不同场景不会自动合并身份。
+
+语录存于运行实例的 `config/qq_jrrp/luck_sentence.json`，字段沿用 `sender`、`sentence`、`from`。数据文件损坏时报告错误，不会清空覆盖；维护前备份。旧实例语录暂不迁移，不自动重绑旧投稿者身份。
+
+## 分发许可
+
+迁移插件保留来源与 **GPL-3.0-only** 许可，见插件目录中的 `LICENSE` 和 `NOTICE`。这不替 BotCraft 框架选择许可证。打包插件时需随包保留许可、来源说明与翻译资源：
+
+```sh
+botcraft pack -i example_plugins/qq_jrrp -o packed_plugins
+```

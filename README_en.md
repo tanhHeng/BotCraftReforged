@@ -48,6 +48,8 @@ Place plugins in the instance's `plugins` directory. Start with the [Echo exampl
 
 The [Plugin development guide](docs/plugin-development.md) covers commands, events, permissions, translations, and QQ messages. The [Packaging guide](docs/packaging.md) covers plugin formats and distribution.
 
+The [daily fortune plugin](docs/jrrp-plugin.md) supports `/jrrp`, Chinese message aliases, quote submissions/withdrawal, and command keyboards for group/C2C messages actually delivered by QQ.
+
 ## Documentation
 
 The detailed guides are currently available in Simplified Chinese:

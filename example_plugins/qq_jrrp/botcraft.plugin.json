@@ -1,0 +1,12 @@
+{
+  "id": "qq_jrrp",
+  "version": "1.0.0",
+  "name": "Daily Fortune",
+  "description": "Daily QQ fortune, quote submissions and native command buttons",
+  "author": "tanh_Heng",
+  "link": "https://github.com/UnknownBits/LazyAlienWS",
+  "entrypoint": "qq_jrrp",
+  "resources": ["lang", "LICENSE", "NOTICE"],
+  "dependencies": {"botcraft": ">=0.1.0"},
+  "license": "GPL-3.0-only"
+}

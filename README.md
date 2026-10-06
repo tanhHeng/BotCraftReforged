@@ -48,6 +48,8 @@ botcraft start
 
 [插件开发指南](docs/plugin-development.md)介绍命令、事件、权限、翻译和 QQ 消息；[打包指南](docs/packaging.md)介绍插件格式与分发。
 
+[今日人品插件](docs/jrrp-plugin.md)提供 `/jrrp`、中文消息触发、语录投稿/撤回和命令键盘；仅对平台实际推送的群聊/C2C 消息生效。
+
 ## 文档
 
 - [文档目录与开发验证](docs/README.md)

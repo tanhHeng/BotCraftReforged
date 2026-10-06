@@ -1,0 +1,26 @@
+qq_jrrp -- GPL-3.0-only
+
+Original source: UnknownBits/LazyAlienWS
+https://github.com/UnknownBits/LazyAlienWS/blob/main/plugins/qq_jrrp.py
+Upstream repository license: GNU General Public License, version 3.
+
+This plugin is a modified version of E:/Projects/LazyBot/plugins/qq_jrrp,
+which in turn ports the upstream plugin. The original notices are retained
+in the adapted Python modules. The six source files reviewed for this port
+were __init__.py, fortune.py, storage.py, messages.py, keyboard.py and
+panels.py. All source for this BotCraft version is included in qq_jrrp/;
+no original data files are required or distributed.
+
+2026-10-01 modifications: NoneBot support, non-numeric QQ OpenID seeds,
+native QQ Markdown, command keyboards, typed atomic JSON persistence and
+owner-only withdrawal.
+2026-10-05 modifications: BotCraft directory plugin and public QQ API,
+group/C2C exact Chinese triggers, translated user-visible output,
+stdlib storage validation, no reference replies and native help registration
+instead of the direct panels HTTP implementation. Language files now use the
+native root lang/ convention for automatic directory and packed-plugin loading;
+message templates and nested Markdown translations are evaluated on sending.
+
+This plugin is distributed under GNU GPL version 3 only, without any
+warranty. See LICENSE for the complete license text, obtained verbatim
+from https://www.gnu.org/licenses/gpl-3.0.txt.
