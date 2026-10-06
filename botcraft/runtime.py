@@ -338,7 +338,12 @@ class Runtime:
             raise RuntimeError('Runtime is stopping')
         return observe_future(self.sync_task_executor.submit(lambda: self.command_manager.execute_console(command, ConsoleSource(self))), self.logger, 'console command')
 
-    def stop(self, *, interrupted=False):
+    def stop(self: Self, *, interrupted: bool = False) -> None:
+        """Stop local and network services with bounded shutdown waits.
+        
+        :param interrupted: Whether to use the shorter interrupted-shutdown deadline.
+        :return: No return value.
+        """
         with self._stop_lock:
             if self._local_started and (self.sync_task_executor.is_on_thread() or self.async_task_executor.is_on_thread()):
                 raise RuntimeError('Use server.exit() from plugin executor threads; stop() cannot wait for itself')
@@ -349,6 +354,11 @@ class Runtime:
             self._exit_requested.set()
             if hasattr(self, 'console_handler'):
                 self.console_handler.stop()
+                console_thread = self.console_handler.get_thread()
+                if console_thread is not None and not self.console_handler.is_on_thread():
+                    self.console_handler.join(timeout=5)
+                    if console_thread.is_alive():
+                        self.logger.warning('Console executor did not stop within five seconds')
             if hasattr(self, 'sender'):
                 self.sender.close()
             deadline = time.monotonic() + (10 if interrupted else 600)

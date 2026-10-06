@@ -43,12 +43,20 @@ botcraft start --config settings/config.yml --permission settings/permissions.ym
 | `http.timeout` | `10.0` 秒；必须是有限正数。 |
 | `permission.mode` | `mixed`；也支持 `native`、`role`，见[权限说明](plugin-development.md#权限与语言)。 |
 | `permission.super_admins` | `[]`；真实 `User.id` 列表，不使用昵称或推测的跨场景身份。 |
-| `advanced_console` | `true`；高级控制台，修改需要重启。 |
+| `advanced_console` | `true`；MCDR 风格高级输入、Tab 补全、多列候选菜单和参数提示，修改需要重启。 |
 | `disable_console_thread` | `false`；是否关闭控制台线程，修改需要重启。 |
 | `disable_console_color` | `false`；关闭控制台颜色。 |
 | `debug.raw_response` | `false`；脱敏原始网关 JSON 和 HTTP 响应日志，可 reload，独立于 `debug.all`。 |
 
 旧配置缺少选项时会按默认值补缺，首次加载可写回文件；不是把已有有效配置替换为默认值。对于凭据或控制台启动选项，reload 不能代替重启。
+
+### 控制台输入与补全
+
+开启 `advanced_console` 后，输入 `/botcraft` 可按 Tab 选择子命令，继续输入时显示多列候选与参数提示；语言设置补全当前可用语言，插件 reload/unload 参数补全已加载插件 ID。多行粘贴按行提交，日志输出不会覆盖正在编辑的命令。
+
+控制台补全范围与执行范围一致：只提供内置 `/botcraft` 运维树，不把 `/echo`、`/jrrp` 等需要真实 QQ 来源的插件命令开放给控制台。插件加载/卸载和语言变更后，下一次补全读取当前状态。
+
+设置 `advanced_console: false` 使用基本标准输入，不提供高级菜单。高级输入初始化失败时会记录英文错误并回退基本输入。`/botcraft exit`、EOF 或 Ctrl-C 请求停止；退出会唤醒高级输入并恢复控制台日志输出。
 
 ### 覆盖与重排
 

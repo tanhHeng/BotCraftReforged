@@ -17,6 +17,17 @@ from botcraft.command.command_source import QQCommandSource, ConsoleSource
 from mcdreforged.plugin.type.common import PluginState
 
 
+class ConsoleSuggestionSource(ConsoleSource):
+    """Use console permissions and preferences without replying while completing."""
+
+    def reply(self: Self, message: str | QTextBase, **kwargs: Any) -> None:
+        """Suppress replies while completing console commands.
+        
+        :param message: Completion diagnostic that is intentionally not emitted.
+        :param kwargs: Reply callback options that are intentionally ignored.
+        :return: No value is returned.
+        """
+        return None
 
 
 class CommandManager(NativeCommandManager):
@@ -113,6 +124,33 @@ class CommandManager(NativeCommandManager):
         if purpose is TraversePurpose.SUGGEST:
             return suggestions
 
+    def suggest_console(self: Self, command: str, source: ConsoleSource | None = None) -> CommandSuggestions:
+        """Suggest only the framework administration tree for this console.
+        
+        :param command: Partial administration command text.
+        :param source: Runtime console source, or None to use a silent completion source.
+        :return: Native command suggestions for the administration tree.
+        """
+        if not isinstance(command, str):
+            raise TypeError('command must be str')
+        if source is None:
+            source = ConsoleSuggestionSource(self.runtime)
+        if not isinstance(source, ConsoleSource) or source._runtime is not self.runtime:
+            raise TypeError('Console suggestions require this Runtime console source')
+        node = self.runtime.builtin_command_root
+        plugin = self.runtime.plugin_manager.get_plugin_from_id('botcraft')
+        if node is None or plugin is None or not plugin.in_states({PluginState.READY}):
+            return CommandSuggestions()
+        if utils.get_element(command) not in node.literals:
+            return CommandSuggestions([CommandSuggestion('', literal) for literal in node.literals])
+        try:
+            with self.runtime.plugin_manager.with_plugin_context(plugin):
+                return node._entry_generate_suggestions(source, command)
+        except CommandError as error:
+            self._format_error(error, source)
+        except Exception as error:
+            self.logger.error('Error suggesting console command %r', command, exc_info=error.exc_info if isinstance(error, CallbackError) else True)
+        return CommandSuggestions()
 
     def execute_console(self: Self, command: str, source: ConsoleSource) -> None:
         """Execute a command in the built-in console administration tree.

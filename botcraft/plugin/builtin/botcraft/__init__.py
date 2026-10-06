@@ -233,7 +233,10 @@ def register(server: QQPluginServerInterface) -> Literal:
             """
             result = getattr(server, action + '_plugin')(ctx['plugin'])
             src.reply(f'plugin {action}: {result}')
-        plugin.then(Literal(action).then(QuotableText('plugin').runs(partial(operate, action=action))))
+        argument = QuotableText('plugin')
+        if action in ('unload', 'reload'):
+            argument.suggests(server.get_plugin_list)
+        plugin.then(Literal(action).then(argument.runs(partial(operate, action=action))))
     plugin.then(Literal('refresh').runs(lambda src: server.refresh_all_plugins()))
     root.then(plugin)
 
