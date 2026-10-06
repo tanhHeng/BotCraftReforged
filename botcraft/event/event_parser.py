@@ -7,6 +7,7 @@ import copy
 
 from botcraft.event.qq_event import QQEvent
 from botcraft.event.qq_interaction import QQInteraction, QQInteractionData
+from botcraft.event.dev_group_message_prefix import normalize_group_message_content
 from botcraft.message.message_data import QQMessageReceivedData
 from botcraft.message.message_received import QQMessageReceived
 
@@ -42,6 +43,8 @@ class EventParser:
                 model = QQMessageReceivedData.deserialize(copy.deepcopy(payload.get('d')))
                 if event_type == 'GROUP_AT_MESSAGE_CREATE' and isinstance(model.content, str):
                     model.content = model.content.lstrip(' ')
+                elif event_type == 'GROUP_MESSAGE_CREATE':
+                    model.content = normalize_group_message_content(model.content, model.mentions)
                 return QQMessageReceived(self._runtime, payload, model)
             if event_type == 'INTERACTION_CREATE':
                 model = QQInteractionData.deserialize(copy.deepcopy(payload.get('d')))

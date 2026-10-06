@@ -60,7 +60,7 @@ def on_load(server: QQPluginServerInterface, prev_module):
 
 - 命令根必须是 `Literal`；`GreedyText` 接收含空格的文本，也可使用 `Integer`、`QuotableText` 等公开节点。
 - 根名称精确匹配注册值。框架不自动添加或删除 `/`，上例不能写成 `echo Hello world`。
-- **只有 `GROUP_AT_MESSAGE_CREATE` 去掉 `message_data.content` 的前导 ASCII 空格**。内部与尾部空格、引用元素不变；普通群消息和 C2C 不做此处理，前导空格会阻止自动匹配命令根。
+- `GROUP_AT_MESSAGE_CREATE` 去掉 `message_data.content` 的前导 ASCII 空格。另有临时 dev 修正：`GROUP_MESSAGE_CREATE` 的正文开头（允许前导 ASCII 空格）若是 `MentionedUser.is_you is True` 且 ID 对应的 `<@id>`，移除一个标签及其后的 ASCII 空格。不处理 `<@!id>`、正文中间标签或重复后续标签，不猜测身份；条件不符保持原文。内部/尾部空格、引用元素、完整 mentions、raw_payload/data 与原始收件日志不变；C2C 不做此处理。
 - `scope=('group',)` 将命令限制为群聊；`('c2c',)` 只允许私聊。默认两者皆可。命令和帮助分别登记 scope，保持一致。
 - `register_help_message(prefix, message, permission=0, *, scope=..., only_admin=False)` 登记 `/botcraft help` 的帮助项及 QQ 帮助面板，`message` 支持英文字符串、语言字典或 `server.rtr(...)` 延迟翻译。面板使用实例配置语言，帮助查询使用当前来源语言；登记不替代命令权限检查。
 - 用 `Literal('/admin').requires(lambda source: source.has_permission(2))` 检查实际执行权限；帮助的 `permission=2` 仅过滤帮助显示，`only_admin=True` 控制平台面板的管理员点击/操作资格，不保证其他用户看不到面板项。
@@ -112,6 +112,8 @@ async def reply_result(source):
 `User.id` 是权限与偏好的真实身份；`user_openid`、`group_openid`、`member_openid` 是路由/AT 用的不同字段，不可互换。使用收到的 `source.user`，或用平台提供的真实 OpenID 构造主动发送目标。例如 `Group(group_openid=actual_group_openid)`，不要用用户 ID 当作会话地址。
 
 `message_data.author` 使用 `User`；`message_data.mentions` 使用 `MentionedUser(User)`，可从 `botcraft.api.types` 导入。其 `is_you: Optional[bool]` 表示该提及是否指向当前机器人，缺失/null 为 `None`，不通过昵称或 READY 身份猜测。提及列表保留机器人自身及其他用户；判断正文是否以机器人提及开头，还需匹配对应 `id` 的实际标签。错误字段类型沿用整事件通用回退规则。
+
+临时前缀修正仅封装在 `botcraft/event/dev_group_message_prefix.py`，解析器调用后写回模型正文，命令与所有回调读取同一结果；不改变事件类型或额外派发。平台修复后删除此模块和解析器导入/调用，保留 `MentionedUser` API。该功能没有持久配置、机器人身份缓存或网络状态查询。
 
 ## 事件与生命周期
 
