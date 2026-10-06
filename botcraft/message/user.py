@@ -59,6 +59,11 @@ class User(QQSerializable):
         return str(scene.value if isinstance(scene, Scene) else scene), conversation
 
 
+class MentionedUser(User):
+    """Mentioned user facts, including whether the mention targets this bot."""
+    is_you: Optional[bool] = None
+
+
 class Group(QQSerializable):
     """A group target identified by its official conversation OpenID."""
     group_openid: Optional[str] = None

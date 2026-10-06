@@ -111,6 +111,8 @@ async def reply_result(source):
 
 `User.id` 是权限与偏好的真实身份；`user_openid`、`group_openid`、`member_openid` 是路由/AT 用的不同字段，不可互换。使用收到的 `source.user`，或用平台提供的真实 OpenID 构造主动发送目标。例如 `Group(group_openid=actual_group_openid)`，不要用用户 ID 当作会话地址。
 
+`message_data.author` 使用 `User`；`message_data.mentions` 使用 `MentionedUser(User)`，可从 `botcraft.api.types` 导入。其 `is_you: Optional[bool]` 表示该提及是否指向当前机器人，缺失/null 为 `None`，不通过昵称或 READY 身份猜测。提及列表保留机器人自身及其他用户；判断正文是否以机器人提及开头，还需匹配对应 `id` 的实际标签。错误字段类型沿用整事件通用回退规则。
+
 ## 事件与生命周期
 
 插件可以定义以下自动发现的回调；`server` 是绑定该插件的接口：

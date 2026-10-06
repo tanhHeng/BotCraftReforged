@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from botcraft.message.user import User
+from botcraft.message.user import MentionedUser, User
 from botcraft.utils.serializer import QQSerializable, QQStrEnum
 
 
@@ -101,7 +101,7 @@ class QQMessageReceivedData(QQSerializable):
     # Optional parsed attachment descriptors.
     attachments: Optional[List[MessageAttachment]] = None
     # Optional parsed mentioned users; scene routing is supplied by the event wrapper.
-    mentions: Optional[List[User]] = None
+    mentions: Optional[List[MentionedUser]] = None
     # Optional parsed ARK card content.
     ark_data: Optional[ARKData] = None
     # Optional nested message elements such as forwarded history.
