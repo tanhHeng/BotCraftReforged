@@ -22,4 +22,10 @@ botcraft:
     version: 'BotCraft version {0}'
     description: 'Show help'
     title: 'BotCraft command help'
-    empty: 'No command help is available.'
+    command:
+      help: 'Show BotCraft command help'
+      permission: 'Manage permissions'
+      plugin: 'Manage plugins'
+      preference: 'Manage language preferences'
+      reload: 'Reload configuration, permissions or preferences'
+      exit: 'Request BotCraft shutdown'

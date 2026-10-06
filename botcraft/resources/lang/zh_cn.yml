@@ -22,4 +22,10 @@ botcraft:
     version: 'BotCraft 版本 {0}'
     description: '查询帮助'
     title: 'BotCraft 指令帮助'
-    empty: '没有可用的指令帮助。'
+    command:
+      help: '查看 BotCraft 指令帮助'
+      permission: '管理权限'
+      plugin: '管理插件'
+      preference: '管理语言偏好'
+      reload: '重新加载配置、权限或偏好'
+      exit: '请求停止 BotCraft'

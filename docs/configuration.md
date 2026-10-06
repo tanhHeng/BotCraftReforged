@@ -117,7 +117,7 @@ Raw response [HTTP] [send message] [http_code:200] {"id":"message-id"}
 /botcraft exit
 ```
 
-`/botcraft` 与 `/botcraft help` 显示相同帮助；内置面板只登记 `/botcraft`。`pref/preference`、`perm/permission` 等子命令别名保留。权限管理、插件操作、reload 和退出仅允许超级管理员或运维控制台；设置较高的普通权限等级不自动授予超级管理员身份。
+`/botcraft` 输出 BotCraft 版本及已登记帮助项的输入框标签；`/botcraft help` 输出 BotCraft 自身的 `help`、`perm/permission`、`plugin`、`pref/preference`、`reload` 和 `exit` 指令帮助。两者均按当前来源语言输出；内置面板仅登记 `/botcraft`。权限管理、插件操作、reload 和退出仅允许超级管理员或运维控制台；设置较高的普通权限等级不自动授予超级管理员身份。
 
 `/botcraft plugin list` 沿用 MCDR 的纯文本分组：已加载项显示名称和 `id@version`，随后列出已禁用、未加载插件文件名及数量。不会打印完整 `Metadata(...)` 调试表示，也不输出 Minecraft 点击/悬浮样式。QQ 来源只发送一条按用户偏好语言生成的被动回复；控制台使用其偏好语言。
 

@@ -72,23 +72,23 @@ def register(server: QQPluginServerInterface) -> Literal:
         src.reply(message)
 
     def help_command(src: QQCommandSource | ConsoleSource) -> None:
-        """Reply with help visible in the invoking scene and language.
+        """Reply with the built-in BotCraft command directory.
 
         :param src: Invoking QQ or console source.
         :return: No value is returned.
         """
-        lines = []
-        for help_ in runtime.plugin_manager.registry_storage.help_messages:
-            if help_.prefix != '/botcraft' or not src.has_permission(help_.permission) or (isinstance(src, QQCommandSource) and src.scene not in help_.scope):
-                continue
-            message = help_.message
-            if isinstance(message, dict):
-                from mcdreforged.utils.translation_utils import translate_from_dict
-                from mcdreforged.translation.language_fallback_handler import LanguageFallbackHandler
-                message = translate_from_dict(message, src.get_preference().language, fallback_handler=LanguageFallbackHandler.auto())
-            message = runtime.translation_manager.evaluate(message, language=src.get_preference().language)
-            lines.append(f'{help_.prefix}: {message}')
-        src.reply('\n'.join(lines) or rtr('help.empty'))
+        entries = (
+            ('/botcraft help', 'help'),
+            ('/botcraft perm', 'permission'),
+            ('/botcraft plugin', 'plugin'),
+            ('/botcraft pref', 'preference'),
+            ('/botcraft reload', 'reload'),
+            ('/botcraft exit', 'exit'),
+        )
+        message = QMarkdown(tr(src, 'help.title'))
+        for command, key in entries:
+            message.append('\n', QTextInput(command, show=command), ' - ', tr(src, 'help.command.' + key))
+        src.reply(message)
     root.runs(root_command)
     root.then(Literal('help').runs(help_command))
 
