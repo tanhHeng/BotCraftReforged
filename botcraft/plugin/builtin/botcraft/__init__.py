@@ -79,14 +79,15 @@ def register(server: QQPluginServerInterface) -> Literal:
         """
         lines = []
         for help_ in runtime.plugin_manager.registry_storage.help_messages:
-            if src.has_permission(help_.permission) and (not isinstance(src, QQCommandSource) or src.scene in help_.scope):
-                message = help_.message
-                if isinstance(message, dict):
-                    from mcdreforged.utils.translation_utils import translate_from_dict
-                    from mcdreforged.translation.language_fallback_handler import LanguageFallbackHandler
-                    message = translate_from_dict(message, src.get_preference().language, fallback_handler=LanguageFallbackHandler.auto())
-                message = runtime.translation_manager.evaluate(message, language=src.get_preference().language)
-                lines.append(f'{help_.prefix}: {message}')
+            if help_.prefix != '/botcraft' or not src.has_permission(help_.permission) or (isinstance(src, QQCommandSource) and src.scene not in help_.scope):
+                continue
+            message = help_.message
+            if isinstance(message, dict):
+                from mcdreforged.utils.translation_utils import translate_from_dict
+                from mcdreforged.translation.language_fallback_handler import LanguageFallbackHandler
+                message = translate_from_dict(message, src.get_preference().language, fallback_handler=LanguageFallbackHandler.auto())
+            message = runtime.translation_manager.evaluate(message, language=src.get_preference().language)
+            lines.append(f'{help_.prefix}: {message}')
         src.reply('\n'.join(lines) or rtr('help.empty'))
     root.runs(root_command)
     root.then(Literal('help').runs(help_command))
