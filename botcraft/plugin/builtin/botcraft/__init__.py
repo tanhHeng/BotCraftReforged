@@ -221,7 +221,28 @@ def register(server: QQPluginServerInterface) -> Literal:
     root.then(pref)
 
     plugin = Literal('plugin').requires(allowed)
-    plugin.then(Literal('list').runs(lambda src: src.reply('\n'.join(str(p.get_metadata()) for p in runtime.plugin_manager.get_all_plugins()))))
+    def list_plugins(src: QQCommandSource | ConsoleSource) -> None:
+        """Reply once with loaded, disabled and unloaded plugin groups.
+        
+        :param src: Invoking QQ or console source.
+        :return: No value is returned.
+        """
+        current_plugins = list(runtime.plugin_manager.get_all_plugins())
+        disabled_plugins = server.get_disabled_plugin_list()
+        unloaded_plugins = server.get_unloaded_plugin_list()
+        message = server.rtr('mcdreforged.mcdr_command.list_plugin.info_loaded_plugin', len(current_plugins))
+        for current in current_plugins:
+            message.append(f'\n- {current.get_metadata().name} ({current.get_identifier()})')
+        message.append('\n', server.rtr('mcdreforged.mcdr_command.list_plugin.info_disabled_plugin', len(disabled_plugins)))
+        for file_path in disabled_plugins:
+            message.append(f'\n- {Path(file_path).name}')
+        message.append('\n', server.rtr('mcdreforged.mcdr_command.list_plugin.info_not_loaded_plugin', len(unloaded_plugins)))
+        for file_path in unloaded_plugins:
+            message.append(f'\n- {Path(file_path).name}')
+        evaluated = runtime.translation_manager.evaluate(message, language=src.get_preference().language)
+        src.reply(QText(clean_minecraft_color_code(evaluated.to_plain_text())))
+
+    plugin.then(Literal('list').runs(list_plugins))
     for action in ('load', 'unload', 'reload'):
         def operate(src: QQCommandSource | ConsoleSource, ctx: CommandContext, *, action: str) -> None:
             """Apply a native plugin operation and reply with its result.

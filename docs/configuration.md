@@ -119,6 +119,8 @@ Raw response [HTTP] [send message] [http_code:200] {"id":"message-id"}
 
 `/botcraft` 与 `/botcraft help` 显示相同帮助；内置面板只登记 `/botcraft`。`pref/preference`、`perm/permission` 等子命令别名保留。权限管理、插件操作、reload 和退出仅允许超级管理员或运维控制台；设置较高的普通权限等级不自动授予超级管理员身份。
 
+`/botcraft plugin list` 沿用 MCDR 的纯文本分组：已加载项显示名称和 `id@version`，随后列出已禁用、未加载插件文件名及数量。不会打印完整 `Metadata(...)` 调试表示，也不输出 Minecraft 点击/悬浮样式。QQ 来源只发送一条按用户偏好语言生成的被动回复；控制台使用其偏好语言。
+
 权限命令可在当前消息场景操作用户；控制台需明确指定 `--group`、`--c2c` 或 `-g/--global` 作用域。C2C 操作要求框架已经记录该用户的真实私聊路由。不要猜测或拼接 OpenID 来建立身份。
 
 维护前备份 `config.yml`、`permissions.yml`、`config/` 与插件文件；`config/` 包含插件数据及用户语言等实例状态。特别是 reload preference 对损坏 JSON 沿用恢复语义，可能清空并重写偏好文件，应先备份。使用 `/botcraft exit` 正常停止；插件自身的后台任务应按[卸载责任](plugin-development.md#后台任务与卸载)收尾。

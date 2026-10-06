@@ -510,7 +510,29 @@ class ServerInterfaceMixin:
         """
         return [p.get_id() for p in self._plugin_manager.get_regular_plugins()]
 
+    def get_unloaded_plugin_list(self: Self) -> list[str]:
+        """List recognized QQ plugin paths that are not currently loaded.
+        
+        :return: Unloaded plugin paths in the native plugin-directory enumeration order.
+        """
+        from botcraft.plugin import plugin_factory
 
+        return [
+            path for path in self._ServerInterface__get_files_in_plugin_directories()
+            if not self._plugin_manager.contains_plugin_file(path) and plugin_factory.is_plugin(path)
+        ]
+
+    def get_disabled_plugin_list(self: Self) -> list[str]:
+        """List disabled QQ plugin paths from the configured plugin directories.
+        
+        :return: Disabled plugin paths in the native plugin-directory enumeration order.
+        """
+        from botcraft.plugin import plugin_factory
+
+        return [
+            path for path in self._ServerInterface__get_files_in_plugin_directories()
+            if plugin_factory.is_disabled_plugin(path)
+        ]
 
     def get_plugin_metadata(self: Self, plugin_id: str) -> Metadata | None:
         """Get metadata for a loaded QQ plugin.
