@@ -87,8 +87,26 @@ class TranslationManager(NativeTranslationManager):
         manager = getattr(self.runtime, 'plugin_manager', None)
         return manager.registry_storage.translations if manager is not None else None
 
-    def tr(self, key, *args, language=None, allow_failure=True, fallback_handler=None, **kwargs):
-        from botcraft.message.qtext.text import QTextBase, QText, QMarkdown, escape_markdown
+    def tr(self: Self, key: str, *args: TranslationParameter, language: str | None = None,
+           allow_failure: bool = True, fallback_handler: LanguageFallbackHandler | None = None,
+           **kwargs: TranslationParameter) -> str | QText | QMarkdown:
+        """Immediately translate a key and format QQ text parameters.
+        
+        :param key: Translation key looked up in framework and plugin resources.
+        :param args: Positional scalar or QQ text formatting values.
+        :param language: Explicit language, or the current synchronous language context.
+        :param allow_failure: Return the key on missing translation when True; otherwise raise KeyError.
+        :param fallback_handler: Native language fallback policy, or automatic fallback when omitted.
+        :param kwargs: Named formatting values; plain values are escaped when Markdown is present.
+        :return: Formatted text, preserving Markdown and at most one parameter keyboard.
+        """
+        return self._translate(False, key, *args, language=language, allow_failure=allow_failure,
+                               fallback_handler=fallback_handler, **kwargs)
+
+    def _translate(self: Self, force_markdown: bool, key: str, /, *args: TranslationParameter,
+                   language: str | None = None, allow_failure: bool = True,
+                   fallback_handler: LanguageFallbackHandler | None = None,
+                   **kwargs: TranslationParameter) -> str | QText | QMarkdown:
         if not isinstance(key, str):
             raise TypeError('Translation key must be str')
         selected_language = self._current_language() if language is None else language
@@ -106,10 +124,10 @@ class TranslationManager(NativeTranslationManager):
             self.logger.error('Error translating key {} to {}'.format(key, selected_language))
             formatter = key
         formatter = formatter.strip('\n\r')
-        resolved = {}
+        resolved: dict[int, TranslationParameter] = {}
         keyboard = None
         has_text = False
-        has_markdown = False
+        has_markdown = force_markdown
         for value in (*args, *kwargs.values()):
             if id(value) in resolved:
                 continue
@@ -130,7 +148,7 @@ class TranslationManager(NativeTranslationManager):
             else:
                 raise TypeError('Unsupported QQ translation parameter')
 
-        def convert(value):
+        def convert(value: TranslationParameter) -> str | int | float | bool | None:
             value = resolved[id(value)]
             if isinstance(value, QTextBase):
                 text = value.to_plain_text()
@@ -149,13 +167,26 @@ class TranslationManager(NativeTranslationManager):
             return QText(formatted, keyboard=copy.deepcopy(keyboard))
         return formatted
 
-
-    def rtr(self, key, *args, **kwargs):
+    def rtr(self: Self, key: str, *args: TranslationParameter, markdown: bool = False,
+            **kwargs: TranslationOption) -> 'QQTranslationText':
+        """Create a translation evaluated in the eventual sending language.
+        
+        :param key: Translation key; it is not looked up during construction.
+        :param args: Positional formatting values, including nested delayed translations.
+        :param markdown: Preserve the resource template as Markdown and escape plain formatting values.
+        :param kwargs: Named formatting values and native language, failure or fallback options.
+        :return: Delayed QQ text whose nested translations share the evaluation language.
+        """
         from botcraft.translation.translation_text import QQTranslationText
-        return QQTranslationText(self, key, *args, **kwargs)
+        return QQTranslationText(self, key, *args, markdown=markdown, **kwargs)
 
-    def evaluate(self, message, language=None):
-        from botcraft.message.qtext.text import QTextBase
+    def evaluate(self: Self, message: str | QTextBase, language: str | None = None) -> str | QTextBase:
+        """Resolve delayed text or copy concrete text for a selected language.
+        
+        :param message: Plain, concrete or delayed QQ message.
+        :param language: Explicit evaluation language, or the current language context.
+        :return: Concrete message with delayed nested values resolved and keyboards preserved.
+        """
         if isinstance(message, str):
             return message
         if not isinstance(message, QTextBase):

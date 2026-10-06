@@ -460,8 +460,16 @@ class ServerInterfaceMixin:
         """
         return self._runtime.translation_manager.tr(key, *args, **kwargs)
 
-    def rtr(self, key, *args, **kwargs):
-        return self._runtime.translation_manager.rtr(key, *args, **kwargs)
+    def rtr(self: Self, key: str, *args: TranslationParameter, markdown: bool = False, **kwargs: TranslationOption) -> QQTranslationText:
+        """Create delayed QQ translation text evaluated in the language active at use time.
+        
+        :param key: Translation key to resolve when evaluated.
+        :param markdown: Whether the translated template is Markdown; this control is not a formatter keyword.
+        :param args: Positional translation-formatting parameters.
+        :param kwargs: Named translation-formatting parameters and supported translation options.
+        :return: A delayed QQTranslationText; it is not evaluated by this call.
+        """
+        return self._runtime.translation_manager.rtr(key, *args, markdown=markdown, **kwargs)
 
     def get_botcraft_language(self: Self) -> str:
         """Get the configured BotCraft language.

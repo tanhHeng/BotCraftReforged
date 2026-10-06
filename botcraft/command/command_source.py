@@ -133,9 +133,16 @@ class ConsoleSource(CommandSource):
         with self._runtime.translation_manager.language_context(self.get_preference().language):
             yield
 
-    def reply(self, message, **kwargs):
+    def reply(self: Self, message: str | QTextBase, **kwargs: object) -> None:
+        """Log a console reply, converting QQ text to plain text.
+        
+        :param message: QQ text is evaluated in the console's preferred language before plain-text conversion.
+        :param kwargs: Accepted command-reply keyword arguments, ignored for console logging.
+        :return: No value is returned and no QQ network message is submitted.
+        """
         from botcraft.message.qtext.text import QTextBase
         if isinstance(message, QTextBase):
+            message = self._runtime.translation_manager.evaluate(message, language=self.get_preference().language)
             message = message.to_plain_text()
         elif hasattr(message, 'to_plain_text'):
             message = message.to_plain_text()

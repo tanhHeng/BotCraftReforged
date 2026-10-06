@@ -11,19 +11,31 @@ DelayedOperationValue: TypeAlias = str | QTextBase | QKeyboardBase | None | tupl
 
 
 class QQTranslationText(QTextBase):
-    def __init__(self, manager, translation_key, *args, **kwargs):
+    def __init__(self: Self, manager: TranslationManager, translation_key: str,
+                 *args: TranslationParameter, markdown: bool = False, **kwargs: TranslationOption) -> None:
+        """Store a translation without looking up or formatting its key.
+        
+        :param manager: Runtime-bound translation manager used at evaluation time.
+        :param translation_key: Resource translation key.
+        :param args: Positional formatting values, including delayed QQ text.
+        :param markdown: Force a Markdown result while preserving the template's markup.
+        :param kwargs: Named formatting values and native translation options.
+        :return: Initialize a delayed message without resolving its language.
+        """
         self.manager = manager
         self.translation_key = translation_key
         self.args = args
         self.kwargs = kwargs
-        self._operations = []
+        self.markdown = markdown
+        self._operations: list[tuple[str, DelayedOperationValue]] = []
 
-    def _evaluate_translation(self, manager=None, language=None):
+    def _evaluate_translation(self: Self, manager: TranslationManager | None = None,
+                              language: str | None = None) -> QText | QMarkdown:
         manager = self.manager
         selected = manager._current_language() if language is None else language
         kwargs = dict(self.kwargs)
         kwargs['language'] = selected
-        result = manager.tr(self.translation_key, *self.args, **kwargs)
+        result = manager._translate(self.markdown, self.translation_key, *self.args, **kwargs)
         if isinstance(result, str):
             result = QText(result)
         for operation, value in self._operations:
@@ -69,14 +81,20 @@ class QQTranslationText(QTextBase):
         result._operations.append(('left', other.copy() if isinstance(other, QTextBase) else other))
         return result
 
-    def copy(self):
-        snapshots = {}
-        def snapshot(value):
+    def copy(self: Self) -> Self:
+        """Copy delayed arguments and operations without evaluating them.
+        
+        :return: Independent delayed message bound to the same manager and Markdown mode.
+        """
+        snapshots: dict[int, TranslationOption] = {}
+
+        def snapshot(value: TranslationOption) -> TranslationOption:
             if id(value) not in snapshots:
                 snapshots[id(value)] = value.copy() if isinstance(value, QTextBase) else copy.deepcopy(value)
             return snapshots[id(value)]
-        result = QQTranslationText(self.manager, self.translation_key, *(snapshot(value) for value in self.args),
-                                   **{key: snapshot(value) for key, value in self.kwargs.items()})
+
+        result = type(self)(self.manager, self.translation_key, *(snapshot(value) for value in self.args),
+                            markdown=self.markdown, **{key: snapshot(value) for key, value in self.kwargs.items()})
         result._operations = []
         for operation, value in self._operations:
             if operation == 'append':

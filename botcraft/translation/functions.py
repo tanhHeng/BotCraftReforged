@@ -16,6 +16,15 @@ def tr(key: str, *args: TranslationParameter, **kwargs: TranslationOption) -> st
     return QQServerInterface.si().tr(key, *args, **kwargs)
 
 
-def rtr(key, *args, **kwargs):
+def rtr(key: str, *args: TranslationParameter, markdown: bool = False,
+        **kwargs: TranslationOption) -> QQTranslationText:
+    """Create runtime-bound text translated when it is evaluated.
+    
+    :param key: Translation resource key; no lookup occurs during this call.
+    :param args: Positional formatting values, including nested delayed translations.
+    :param markdown: Preserve Markdown template markup and escape ordinary formatting values.
+    :param kwargs: Named formatting values and native translation options.
+    :return: Delayed text evaluated in the eventual sending language.
+    """
     from botcraft.plugin.si.server_interface import QQServerInterface
-    return QQServerInterface.si().rtr(key, *args, **kwargs)
+    return QQServerInterface.si().rtr(key, *args, markdown=markdown, **kwargs)

@@ -170,9 +170,11 @@ def greet(server, source, name):
     source.reply(server.rtr('greet.hello', name=name))
 ```
 
-`server.tr(key, ...)` 立即求值；`server.rtr(key, ...)` 延迟到消息发送时求值，适合 `source.reply` 按用户偏好选择语言。立即求值可传 `language=source.get_preference().language`，或在同步代码中使用 `with source.preferred_language_context():`；该上下文不能跨越 `await`。
+`server.rtr(key, ...)` 延迟到展示/发送边界求值，`source.reply` 按当前用户偏好选择语言。Markdown 模板使用 `server.rtr(key, markdown=True, ...)`；模板保留 Markdown，普通字符串/`QText` 参数按纯文本转义，嵌套延迟文本在同一语言下求值。
 
-也可从 `botcraft.api.qtext` 导入 `tr`、`rtr`，但需要运行中的接口。参数支持标量、`QText`、`QMarkdown` 和延迟翻译；缺少键默认记录英文错误并显示键，`allow_failure=False` 则抛出 `KeyError`。插件硬编码日志、异常和注释使用英文，中文用户反馈放入翻译字典或翻译资源。
+仅在必须立即获取字符串的地方使用 `server.tr`，例如键盘标签、按钮数据、异常文本或明确的同步查询。即时求值可指定 `language=source.get_preference().language`，或在同步代码中使用 `source.preferred_language_context()`；该上下文不能跨 `await`。不应把延迟对象提前 `str()` 或作为不接受延迟文本的构造器字符串参数。
+
+`botcraft.api.qtext` 也导出 `tr`、`rtr`，调用需要运行中的接口。缺少键默认记录英文错误并显示键，`allow_failure=False` 抛出 `KeyError`。插件硬编码日志、异常和注释使用英文，中文用户反馈通过翻译键提供。
 
 ## Markdown 与键盘
 
