@@ -20,11 +20,16 @@ example/
 ├── echo_plugin/
 │   └── __init__.py
 ├── requirements.txt
+├── lang/
+│   ├── en_us.yml
+│   └── zh_cn.yml
 └── assets/
     └── help.txt
 ```
 
 `requirements.txt` 和资源目录均可省略。`echo_plugin/__init__.py` 放置插件回调；若把开发指南的单文件代码迁入目录插件，使用 JSON 元数据作为唯一元数据来源，不再需要该文件的 `PLUGIN_METADATA`。
+
+目录和压缩插件根目录的 `lang/` 会自动发现并注册 `.json`、`.yml`、`.yaml` 翻译文件，无需在 `on_load` 手动读文件。翻译键建议使用插件 ID 命名空间；`lang/` 与 Python 包目录并列，不放入包内或 `resources/lang/`。打包时在元数据 `resources` 中包含 `lang`，确保它随归档分发。
 
 ## 元数据
 
@@ -40,7 +45,7 @@ example/
   "dependencies": {
     "botcraft": ">=0.1.0"
   },
-  "resources": ["assets"],
+  "resources": ["assets", "lang"],
   "archive_name": "{id}-v{version}"
 }
 ```

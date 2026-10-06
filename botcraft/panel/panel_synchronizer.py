@@ -98,7 +98,7 @@ class PanelSynchronizer:
         with self._capture_lock:
             self._capture_locked()
 
-    def _capture_locked(self):
+    def _capture_locked(self: Self) -> None:
         records = tuple(self.runtime.plugin_manager.registry_storage.panel_help_messages)
         language = self.runtime.get_language()
         for scope in self.SCOPES:
@@ -110,6 +110,10 @@ class PanelSynchronizer:
                         continue
                     name = self._field(record.prefix, 'name', 14)
                     desc = translate_from_dict(record.message, language) if isinstance(record.message, dict) else record.message
+                    if isinstance(desc, QQTranslationText):
+                        delayed = desc.copy()
+                        delayed.kwargs['allow_failure'] = False
+                        desc = self.runtime.translation_manager.evaluate(delayed, language=language).to_plain_text()
                     desc = self._field(desc, 'description', 30)
                     if not isinstance(record.only_admin, bool):
                         raise ValueError('panel only_admin must be bool')
@@ -117,7 +121,7 @@ class PanelSynchronizer:
                     if name in items and items[name] != item:
                         raise ValueError(f'conflicting help metadata for {name!r} in {scope}')
                     items.setdefault(name, item)
-            except (ValueError, TypeError, KeyError) as caught:
+            except Exception as caught:
                 error = caught
             all_items = tuple(items.values())
             desired = all_items[:20]

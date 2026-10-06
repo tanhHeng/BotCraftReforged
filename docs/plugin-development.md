@@ -62,7 +62,7 @@ def on_load(server: QQPluginServerInterface, prev_module):
 - 根名称精确匹配注册值。框架不自动添加或删除 `/`，上例不能写成 `echo Hello world`。
 - **只有 `GROUP_AT_MESSAGE_CREATE` 去掉 `message_data.content` 的前导 ASCII 空格**。内部与尾部空格、引用元素不变；普通群消息和 C2C 不做此处理，前导空格会阻止自动匹配命令根。
 - `scope=('group',)` 将命令限制为群聊；`('c2c',)` 只允许私聊。默认两者皆可。命令和帮助分别登记 scope，保持一致。
-- `register_help_message(prefix, message, permission=0, *, scope=..., only_admin=False)` 登记 `/botcraft help` 的帮助项及 QQ 帮助面板，`message` 可以是英文字符串或语言字典。它不会替代命令本身的权限检查。
+- `register_help_message(prefix, message, permission=0, *, scope=..., only_admin=False)` 登记 `/botcraft help` 的帮助项及 QQ 帮助面板，`message` 支持英文字符串、语言字典或 `server.rtr(...)` 延迟翻译。面板使用实例配置语言，帮助查询使用当前来源语言；登记不替代命令权限检查。
 - 用 `Literal('/admin').requires(lambda source: source.has_permission(2))` 检查实际执行权限；帮助的 `permission=2` 仅过滤帮助显示，`only_admin=True` 控制平台面板的管理员点击/操作资格，不保证其他用户看不到面板项。
 - 帮助面板的名称为 1–14 字符，描述为 1–30 字符，不含控制字符。每个场景最多展示 20 项，超出项不影响命令注册；`server.get_panel_status('group')` 或 `('c2c')` 可查看状态及未展示的前缀。
 - 运维控制台只执行内置 `/botcraft` 树，不是测试插件命令的 QQ 来源。`server.execute_command(command, source)` 必须使用本实例真实的 `QQCommandSource`。
@@ -158,16 +158,33 @@ def set_english(server, source):
 
 ### 翻译
 
-以插件 ID 作为翻译键命名空间。在 `on_load` 中登记语言字典：
+目录和压缩插件可在根目录 `lang/` 放置 `en_us.yml`、`zh_cn.yml` 等 JSON/YAML 文件；BotCraft 自动发现并注册，无需手动读文件。翻译键以插件 ID 为命名空间。例如 `lang/en_us.yml`：
+
+```yaml
+greet:
+  hello: 'Hello, {name}!'
+  help: 'Send a greeting'
+```
+
+单文件插件或动态翻译仍可在 `on_load` 调用 `register_translation(language, mapping)`。优先通过轻量封装返回延迟文本，不在构造时固定用户语言：
 
 ```python
-def register_messages(server):
-    server.register_translation('en_us', {'greet': {'hello': 'Hello, {name}!'}})
-    server.register_translation('zh_cn', {'greet': {'hello': '你好，{name}！'}})
+from typing import Any
+from types import ModuleType
+from botcraft.api.command import QQCommandSource
+from botcraft.api.qtext import QQTranslationText
+from botcraft.api.types import QQPluginServerInterface
 
+PLUGIN_ID = 'greet'
 
-def greet(server, source, name):
-    source.reply(server.rtr('greet.hello', name=name))
+def rtr(server: QQPluginServerInterface, key: str, *args: Any, **kwargs: Any) -> QQTranslationText:
+    return server.rtr(f'{PLUGIN_ID}.{key}', *args, **kwargs)
+
+def greet(server: QQPluginServerInterface, source: QQCommandSource, name: str) -> None:
+    source.reply(rtr(server, 'hello', name=name))
+
+def on_load(server: QQPluginServerInterface, prev_module: ModuleType | None) -> None:
+    server.register_help_message('/greet', rtr(server, 'help'))
 ```
 
 `server.rtr(key, ...)` 延迟到展示/发送边界求值，`source.reply` 按当前用户偏好选择语言。Markdown 模板使用 `server.rtr(key, markdown=True, ...)`；模板保留 Markdown，普通字符串/`QText` 参数按纯文本转义，嵌套延迟文本在同一语言下求值。

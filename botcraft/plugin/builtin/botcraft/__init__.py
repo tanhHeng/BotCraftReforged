@@ -1,6 +1,15 @@
 """Built-in administration commands using native MCDR nodes."""
 from copy import deepcopy
 from functools import partial
+from pathlib import Path
+from mcdreforged.utils.string_utils import clean_minecraft_color_code
+from typing import Any
+from mcdreforged.command.builder.common import CommandContext
+from mcdreforged.command.builder.nodes.basic import AbstractNode
+from botcraft.plugin.si.plugin_server_interface import QQPluginServerInterface
+from botcraft.message.qtext.text import QText, QMarkdown
+from botcraft.translation.translation_text import QQTranslationText
+from botcraft.translation.translation_manager import TranslationParameter
 from mcdreforged.command.builder.nodes.basic import Literal
 from mcdreforged.command.builder.nodes.arguments import Text, QuotableText
 from mcdreforged.permission.permission_level import PermissionLevel
@@ -8,17 +17,48 @@ from botcraft.command.command_source import QQCommandSource, ConsoleSource
 from botcraft.message.user import User
 
 
-def register(server):
+def register(server: QQPluginServerInterface) -> Literal:
+    """Register the built-in administration command tree.
+    
+    :param server: Bound interface of the built-in plugin.
+    :return: Registered administration root.
+    """
     runtime = server._runtime
     manager = runtime.permission_manager
-    def tr(src, key, *args):
+    def tr(src: QQCommandSource | ConsoleSource, key: str, *args: TranslationParameter) -> str | QText | QMarkdown:
+        """Translate validation feedback in the invoking source language.
+        
+        :param src: Invoking QQ or console source.
+        :param key: BotCraft-relative translation key.
+        :param args: Open translation formatting arguments.
+        :return: Immediately localized validation feedback.
+        """
         return runtime.translation_manager.tr('botcraft.' + key, *args, language=src.get_preference().language)
+
+    def rtr(key: str, *args: TranslationParameter) -> QQTranslationText:
+        """Create source-language-delayed BotCraft feedback.
+        
+        :param key: BotCraft-relative translation key.
+        :param args: Open translation formatting arguments.
+        :return: Translation evaluated by the reply recipient language.
+        """
+        return server.rtr('botcraft.' + key, *args)
     root = Literal('/botcraft')
 
-    def allowed(src):
+    def allowed(src: QQCommandSource | ConsoleSource) -> bool:
+        """Check access to administrative commands.
+        
+        :param src: Invoking QQ or console source.
+        :return: Whether the source is console or a configured super administrator.
+        """
         return isinstance(src, ConsoleSource) or manager.is_super_admin(src)
 
-    def help_command(src):
+    def help_command(src: QQCommandSource | ConsoleSource) -> None:
+        """Reply with help visible in the invoking scene and language.
+        
+        :param src: Invoking QQ or console source.
+        :return: No value is returned.
+        """
         lines = []
         for help_ in runtime.plugin_manager.registry_storage.help_messages:
             if src.has_permission(help_.permission) and (not isinstance(src, QQCommandSource) or src.scene in help_.scope):
@@ -27,12 +67,19 @@ def register(server):
                     from mcdreforged.utils.translation_utils import translate_from_dict
                     from mcdreforged.translation.language_fallback_handler import LanguageFallbackHandler
                     message = translate_from_dict(message, src.get_preference().language, fallback_handler=LanguageFallbackHandler.auto())
+                message = runtime.translation_manager.evaluate(message, language=src.get_preference().language)
                 lines.append(f'{help_.prefix}: {message}')
-        src.reply('\n'.join(lines) or tr(src, 'help.empty'))
+        src.reply('\n'.join(lines) or rtr('help.empty'))
     root.runs(help_command)
     root.then(Literal('help').runs(help_command))
 
-    def choose_target(src, target=None):
+    def choose_target(src: QQCommandSource | ConsoleSource, target: str | None = None) -> User:
+        """Resolve an explicit, mentioned or invoking permission target.
+        
+        :param src: Invoking QQ or console source.
+        :param target: Explicit user identifier, or None to use a mention or invoking user.
+        :return: Independent target user with appropriate conversation scope.
+        """
         mentions = src.message_data.mentions or [] if isinstance(src, QQCommandSource) else []
         if target and mentions or len(mentions) > 1:
             raise ValueError(tr(src, 'permission.ambiguity'))
@@ -51,7 +98,14 @@ def register(server):
             return deepcopy(src.user)
         raise ValueError('Console commands require a known user ID')
 
-    def permission_action(src, ctx, action):
+    def permission_action(src: QQCommandSource | ConsoleSource, ctx: CommandContext | dict[str, Any], action: str) -> None:
+        """Apply a permission command with its explicit scope.
+        
+        :param src: Invoking QQ or console source.
+        :param ctx: Parsed permission arguments and scope flags.
+        :param action: Permission operation to perform.
+        :return: No value is returned.
+        """
         try:
             target = choose_target(src, ctx.get('target'))
             group_id = ctx.get('group_id')
@@ -71,22 +125,34 @@ def register(server):
             if action == 'set':
                 level = PermissionLevel.from_value(ctx['level'])
                 manager.set_permission(target, level, global_scope=global_scope)
-                src.reply(tr(src, 'permission.set', target.id, level.name))
+                src.reply(rtr('permission.set', target.id, level.name))
             elif action == 'remove':
                 manager.remove_permission(target, global_scope=global_scope)
-                src.reply(tr(src, 'permission.remove', target.id))
+                src.reply(rtr('permission.remove', target.id))
             else:
                 if global_scope:
                     level = manager.get_player_permission_level(manager.encode_key(target, global_scope=True), auto_add=False)
-                    src.reply(tr(src, 'permission.query_global', target.id, level))
+                    src.reply(rtr('permission.query_global', target.id, level))
                 else:
-                    src.reply(tr(src, 'permission.query', target.id, manager.get_permission(target)))
+                    src.reply(rtr('permission.query', target.id, manager.get_permission(target)))
         except (ValueError, TypeError, KeyError) as error:
             src.reply(str(error))
 
-    def scopes(node, action):
+    def scopes(node: AbstractNode, action: str) -> AbstractNode:
+        """Attach supported permission scope flags to an argument node.
+        
+        :param node: Permission operation node.
+        :param action: Permission operation to perform.
+        :return: The operation node with scope branches registered.
+        """
         node.runs(lambda src, ctx: permission_action(src, ctx, action))
-        def flagged(flag, field):
+        def flagged(flag: str | set[str], field: str) -> Literal:
+            """Build a permission scope flag that redirects to its operation.
+            
+            :param flag: Literal flag or aliases.
+            :param field: Context field marked by the flag.
+            :return: Flag node redirecting to the operation.
+            """
             return Literal(flag).requires(lambda src, ctx: (ctx.__setitem__(field, True), True)[1]).redirects(node)
         node.then(flagged({'-g', '--global'}, 'global_scope'))
         node.then(flagged('--c2c', 'c2c'))
@@ -97,7 +163,13 @@ def register(server):
 
     perm = Literal({'permission', 'perm'}).requires(allowed)
     perm.runs(lambda src: src.reply('permission list [level] | set <id> <level> | query [id] | remove <id>; --group <id> / --c2c / -g'))
-    def list_permission(src, ctx):
+    def list_permission(src: QQCommandSource | ConsoleSource, ctx: CommandContext | dict[str, Any]) -> None:
+        """Reply with users belonging to the selected permission levels.
+        
+        :param src: Invoking QQ or console source.
+        :param ctx: Optional permission level argument.
+        :return: No value is returned.
+        """
         levels = [PermissionLevel.from_value(ctx['level'])] if 'level' in ctx else PermissionLevel.INSTANCES
         src.reply('\n'.join(f'{lv.name}: {manager.get_permission_group_list(lv.name)}' for lv in levels))
     perm.then(Literal('list').runs(lambda src: list_permission(src, {})).then(Text('level').runs(list_permission)))
@@ -118,20 +190,31 @@ def register(server):
     root.then(perm)
 
     pref = Literal({'preference', 'pref'})
-    def show_pref(src):
-        src.reply(tr(src, 'preference.language', runtime.preference_manager.get_preference(src).language) + '; available: ' + ', '.join(sorted(runtime.translation_manager.available_languages)))
+    def show_pref(src: QQCommandSource | ConsoleSource) -> None:
+        """Reply with the active language and available languages.
+        
+        :param src: Invoking QQ or console source.
+        :return: No value is returned.
+        """
+        src.reply(rtr('preference.language', runtime.preference_manager.get_preference(src).language) + '; available: ' + ', '.join(sorted(runtime.translation_manager.available_languages)))
     pref.runs(show_pref).then(Literal('list').runs(show_pref))
     language = Literal('language').runs(show_pref)
-    def set_language(src, value):
+    def set_language(src: QQCommandSource | ConsoleSource, value: str | None) -> None:
+        """Persist a selected source language or reset to runtime language.
+        
+        :param src: Invoking QQ or console source.
+        :param value: Requested language, or None to reset.
+        :return: No value is returned.
+        """
         if value is None:
             value = runtime.get_language()
         if value not in runtime.translation_manager.available_languages:
-            src.reply(tr(src, 'preference.invalid_language', value))
+            src.reply(rtr('preference.invalid_language', value))
             return
         item = runtime.preference_manager.get_preference(src)
         item.language = value
         runtime.preference_manager.set_preference(src, item)
-        src.reply(tr(src, 'preference.set', value))
+        src.reply(rtr('preference.set', value))
     language.then(Literal('set').then(QuotableText('value').suggests(lambda: runtime.translation_manager.available_languages).runs(lambda src, ctx: set_language(src, ctx['value']))))
     language.then(Literal('reset').runs(lambda src: set_language(src, None)))
     pref.then(language)
@@ -140,7 +223,14 @@ def register(server):
     plugin = Literal('plugin').requires(allowed)
     plugin.then(Literal('list').runs(lambda src: src.reply('\n'.join(str(p.get_metadata()) for p in runtime.plugin_manager.get_all_plugins()))))
     for action in ('load', 'unload', 'reload'):
-        def operate(src, ctx, *, action):
+        def operate(src: QQCommandSource | ConsoleSource, ctx: CommandContext, *, action: str) -> None:
+            """Apply a native plugin operation and reply with its result.
+            
+            :param src: Invoking QQ or console source.
+            :param ctx: Parsed plugin identifier or path.
+            :param action: Native plugin operation to invoke.
+            :return: No value is returned.
+            """
             result = getattr(server, action + '_plugin')(ctx['plugin'])
             src.reply(f'plugin {action}: {result}')
         plugin.then(Literal(action).then(QuotableText('plugin').runs(partial(operate, action=action))))
@@ -148,22 +238,25 @@ def register(server):
     root.then(plugin)
 
     reload_node = Literal('reload').requires(allowed)
-    def reload_part(src, *, part):
+    def reload_part(src: QQCommandSource | ConsoleSource, *, part: str) -> None:
+        """Reload the selected administration configuration component.
+        
+        :param src: Invoking QQ or console source.
+        :param part: Configuration, permission or preference component.
+        :return: No value is returned.
+        """
         if part == 'config':
             runtime.load_config(log=True)
         elif part == 'permission':
             runtime.permission_manager.load_permission_file(allowed_missing_file=False)
         else:
             runtime.preference_manager.load_preferences()
-        src.reply(tr(src, 'reload.' + part))
+        src.reply(rtr('reload.' + part))
     for part in ('config', 'permission', 'preference'):
         reload_node.then(Literal(part).runs(partial(reload_part, part=part)))
     root.then(reload_node)
     root.then(Literal('exit').requires(allowed).runs(lambda src: runtime.exit()))
     server.register_command(root)
-    server.register_help_message('/botcraft', {
-        language: runtime.translation_manager.tr('botcraft.help.description', language=language)
-        for language in runtime.translation_manager.available_languages
-    })
+    server.register_help_message('/botcraft', server.rtr('botcraft.help.description'))
     runtime.builtin_command_root = root
     return root

@@ -24,9 +24,21 @@ class PluginCommandHolder(NativePluginCommandHolder):
 
 
 class HelpMessage(NativeHelpMessage):
-    def __init__(self, plugin, prefix, message, permission=0, scope=('group', 'c2c'), only_admin=False):
-        if not isinstance(prefix, str) or not isinstance(message, (str, dict)):
-            raise TypeError('Help prefix must be str and description must be str or translation dict')
+    def __init__(self: Self, plugin: 'Plugin', prefix: str,
+                 message: str | dict[str, str] | QQTranslationText, permission: int = 0,
+                 scope: Sequence[str] = ('group', 'c2c'), only_admin: bool = False) -> None:
+        """Store command help metadata without resolving delayed translation.
+        
+        :param plugin: Plugin owning the help entry.
+        :param prefix: Displayed command prefix.
+        :param message: Literal, language-indexed or delayed description; panels resolve the configured language.
+        :param permission: Required command permission level.
+        :param scope: Group and/or C2C conversations receiving this help entry.
+        :param only_admin: Whether the panel command is restricted to administrators.
+        :return: Store help metadata for subsequent command help and panel capture.
+        """
+        if not isinstance(prefix, str) or not isinstance(message, (str, dict, QQTranslationText)):
+            raise TypeError('Help prefix must be str and description must be str, translation dict or QQTranslationText')
         scope = tuple(scope)
         if not set(scope).issubset({'group', 'c2c'}):
             raise ValueError("scope must contain only 'group' and 'c2c'")
