@@ -5,16 +5,14 @@ qq_jrrp:
 
     — {source}
   submission_template: |-
-    /jrrp post
-    !文本
+    /jrrp post '''
     Replace this with your quote; multiple lines are allowed
-    !出处
+    '''
     Author / source
   submission_quotation: |-
-    > /jrrp post
-    > \!文本
+    > /jrrp post '''
     > Replace this with your quote; multiple lines are allowed
-    > \!出处
+    > '''
     > Author / source
   submission: |-
     # Submit a quote
@@ -23,7 +21,7 @@ qq_jrrp:
 
     {template}
 
-    Multiple lines are allowed. Both text and source must be non-empty.
+    Triple-quote markers occupy their own lines (the opening marker follows the command). Internal whitespace is preserved. Both quote and source must be non-empty.
   help: |-
     # Daily fortune · Help
 

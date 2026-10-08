@@ -5,16 +5,14 @@ qq_jrrp:
 
     —— {source}
   submission_template: |-
-    /jrrp post
-    !文本
+    /jrrp post '''
     在此处填写文本 可换行
-    !出处
+    '''
     作者《出处》
   submission_quotation: |-
-    > /jrrp post
-    > \!文本
+    > /jrrp post '''
     > 在此处填写文本 可换行
-    > \!出处
+    > '''
     > 作者《出处》
   submission: |-
     # 语录投稿
@@ -23,7 +21,7 @@ qq_jrrp:
 
     {template}
 
-    文本可换行；文本和出处均不能为空。
+    三单引号标记须独占行（起始标记紧跟命令）；文本可换行，内部空格保留。文本和出处均不能为空。
   help: |-
     # 今日人品 · 帮助
 

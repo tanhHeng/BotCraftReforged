@@ -15,8 +15,6 @@ from .fortune import luck_category
 from .storage import Sentence
 
 COMMAND = '/jrrp'
-TEXT_MARKER = '!\u6587\u672c\n'
-SOURCE_MARKER = '\n!\u51fa\u5904\n'
 _MARKDOWN_ESCAPES = str.maketrans({char: f'\\{char}' for char in '\\`*_{}[]()#+-.!|>~<'})
 
 
