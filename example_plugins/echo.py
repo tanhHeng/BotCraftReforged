@@ -1,6 +1,6 @@
 """Reply passively with the text supplied to /echo."""
 from types import ModuleType
-from botcraft.api.command import CommandContext, GreedyText, Literal, QQCommandSource
+from botcraft.api.command import CommandContext, GreedyText, QQCommandSource, SimpleCommandBuilder
 from botcraft.api.types import QQPluginServerInterface
 
 
@@ -19,5 +19,14 @@ def echo(source: QQCommandSource, context: CommandContext) -> None:
 
 
 def on_load(server: QQPluginServerInterface, prev_module: ModuleType | None) -> None:
-    server.register_command(Literal('/echo').then(GreedyText('text').runs(echo)))
-    server.register_help_message('/echo', 'Echo the supplied text')
+    # Declare the command path separately from its argument node type.
+    builder = SimpleCommandBuilder()
+    builder.command('/echo <text>', echo)
+    # GreedyText preserves spaces in the supplied reply text.
+    builder.arg('text', GreedyText)
+    builder.register(server)
+    # Help resolves this language dictionary for the viewer or panel language.
+    server.register_help_message('/echo', {
+        'zh_cn': '复述提供的文本',
+        'en_us': 'Echo the supplied text',
+    })

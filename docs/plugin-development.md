@@ -26,7 +26,7 @@ def escape_markdown(text: str) -> str:
 保存为实例的 `plugins/echo.py`，启动后在群聊或 C2C 发送 `/echo Hello world`：
 
 ```python
-from botcraft.api.command import CommandContext, GreedyText, Literal, QQCommandSource
+from botcraft.api.command import CommandContext, GreedyText, QQCommandSource, SimpleCommandBuilder
 from botcraft.api.types import QQPluginServerInterface
 
 PLUGIN_METADATA = {
@@ -43,18 +43,21 @@ def echo(source: QQCommandSource, context: CommandContext):
 
 
 def on_load(server: QQPluginServerInterface, prev_module):
-    server.register_command(
-        Literal('/echo').then(GreedyText('text').runs(echo)),
-        scope=('group', 'c2c'),
-    )
+    # 声明命令路径，再指定参数节点类型；GreedyText 保留文本内的空格。
+    builder = SimpleCommandBuilder()
+    builder.command('/echo <text>', echo)
+    builder.arg('text', GreedyText)
+    builder.register(server)
     server.register_help_message(
         '/echo',
-        'Echo the supplied text',
+        {'zh_cn': '复述提供的文本', 'en_us': 'Echo the supplied text'},
         scope=('group', 'c2c'),
     )
 ```
 
 也可直接复制[仓库 Echo 示例](../example_plugins/echo.py)到配置的插件目录。示例不会自动安装到运行实例；不要同时加载两个 ID 为 `echo` 的插件。`/botcraft plugin reload echo` 可重载已加载插件。
+
+`SimpleCommandBuilder` 将命令路径构建为原生命令树，`register(server)` 使用默认的群聊与 C2C scope。帮助的语言字典在查询时按来源语言、在面板中按实例语言解析；命令执行仍由真实 QQ 消息来源提供被动回复关联。
 
 ### 命令与帮助
 
