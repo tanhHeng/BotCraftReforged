@@ -10,7 +10,7 @@ from datetime import date
 from pathlib import Path
 from types import ModuleType
 
-from botcraft.api.command import GreedyText, Literal, QQCommandSource
+from botcraft.api.command import GreedyText, Literal, QQCommandSource, Text
 from botcraft.message.message_received import QQMessageReceived
 from botcraft.api.types import QQPluginServerInterface
 
@@ -36,8 +36,9 @@ def parse_submission(payload: str, sender: str) -> Sentence | None:
     return Sentence(sender, text, source.strip())
 
 
-def _reply(server: QQPluginServerInterface, source: QQCommandSource, response) -> None:
-    response.set_keyboard(command_keyboard(server, source.user.id, is_c2c=source.scene == 'c2c'))
+def _reply(server: QQPluginServerInterface, source: QQCommandSource, response,
+           *, submission_id: str | None = None) -> None:
+    response.set_keyboard(command_keyboard(server, is_c2c=source.scene == 'c2c', submission_id=submission_id))
     source.reply(response)
 
 
@@ -61,6 +62,7 @@ def help_handler(server: QQPluginServerInterface, source: QQCommandSource) -> No
 def post_handler(server: QQPluginServerInterface, store: SentenceStore, source: QQCommandSource,
                  payload: str | None = None) -> None:
     with source.preferred_language_context():
+        submission_id = None
         try:
             if payload is None:
                 response = submission_markdown(server)
@@ -72,21 +74,28 @@ def post_handler(server: QQPluginServerInterface, store: SentenceStore, source: 
                 else:
                     store.add(sentence)
                     response = _rtr(server, 'post_success', markdown=True, quotation=sentence_markdown(server, sentence))
+                    submission_id = sentence.id
         except (OSError, ValueError):
             server.logger.exception('qq_jrrp sentence storage failed')
             response = _rtr(server, 'storage_error', markdown=True)
-        _reply(server, source, response)
+        _reply(server, source, response, submission_id=submission_id)
 
 
-def withdraw_handler(server: QQPluginServerInterface, store: SentenceStore, source: QQCommandSource) -> None:
+def withdraw_handler(server: QQPluginServerInterface, store: SentenceStore, source: QQCommandSource,
+                     submission_id: str | None = None) -> None:
     with source.preferred_language_context():
+        if submission_id is None:
+            _reply(server, source, _rtr(server, 'withdraw_usage', markdown=True))
+            return
         try:
             sender = source.user.require_identity()
-            sentence = store.withdraw(sender)
+            sentence = store.withdraw(submission_id, sender, privileged=source.has_permission(2))
             response = (
                 _rtr(server, 'withdraw_missing', markdown=True) if sentence is None
                 else _rtr(server, 'withdraw_success', markdown=True, quotation=sentence_markdown(server, sentence))
             )
+        except PermissionError:
+            response = _rtr(server, 'withdraw_denied', markdown=True)
         except (OSError, ValueError):
             server.logger.exception('qq_jrrp sentence storage failed')
             response = _rtr(server, 'storage_error', markdown=True)
@@ -101,7 +110,9 @@ def on_load(server: QQPluginServerInterface, prev_module: ModuleType | None) -> 
     root.then(Literal('post').runs(lambda source: post_handler(server, store, source)).then(
         GreedyText('payload').runs(lambda source, context: post_handler(server, store, source, context['payload']))
     ))
-    root.then(Literal('withdraw').runs(lambda source: withdraw_handler(server, store, source)))
+    root.then(Literal('withdraw').runs(lambda source: withdraw_handler(server, store, source)).then(
+        Text('id').runs(lambda source, context: withdraw_handler(server, store, source, context['id']))
+    ))
     server.register_command(root, scope=('group', 'c2c'))
     server.register_help_message(COMMAND, _rtr(server, 'panel_description'), scope=('group', 'c2c'))
 

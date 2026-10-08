@@ -22,6 +22,8 @@ native root lang/ convention for automatic directory and packed-plugin loading;
 message templates and nested Markdown translations are evaluated on sending.
 2026-10-08 modifications: separate command handlers, triple-quoted submissions,
 persistent submission UUIDs and migration of composite senders to official user IDs.
+Withdrawal now targets a submission UUID, checks author ownership or permission
+level 2, and exposes unrestricted withdrawal buttons only after successful posts.
 
 This plugin is distributed under GNU GPL version 3 only, without any
 warranty. See LICENSE for the complete license text, obtained verbatim

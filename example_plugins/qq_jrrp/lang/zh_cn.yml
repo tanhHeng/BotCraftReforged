@@ -27,7 +27,7 @@ qq_jrrp:
 
     - **/jrrp**：查看今日幸运指数与语录。
     - **/jrrp post**：查看投稿格式，或点击「投稿」填写模板。
-    - **/jrrp withdraw**：撤回自己的最近一条投稿。
+    - **/jrrp withdraw <id>**：撤回指定投稿，仅投稿者本人或权限等级至少为 2 的用户可执行。
     - **/jrrp help**：显示本帮助。
 
     同一天的幸运指数固定，仅供娱乐。语录池不变时，最多随机到三句语录。
@@ -58,21 +58,25 @@ qq_jrrp:
   withdraw_missing: |-
     # 撤回失败
 
-    找不到自己的投稿。
+    指定投稿不存在或已被撤回。
   withdraw_success: |-
     # 撤回成功
 
     {quotation}
-  arguments_invalid: |-
-    # 参数错误
+  withdraw_usage: |-
+    # 撤回投稿
 
-    请使用 /jrrp help。
+    请点击投稿成功消息中的「撤回投稿」，或发送 /jrrp withdraw <id>。
+  withdraw_denied: |-
+    # 无权撤回
+
+    仅投稿者本人或权限等级至少为 2 的用户可撤回这条投稿。
   storage_error: |-
     # 语录数据读写失败
 
     请联系管理员检查数据文件和目录权限。
   buttons:
-    fortune: '今日运势'
+    fortune: '今日人品'
     help: '帮助'
     submit: '投稿'
     withdraw: '撤回投稿'

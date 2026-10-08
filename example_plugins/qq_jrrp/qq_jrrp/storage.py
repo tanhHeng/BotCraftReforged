@@ -109,11 +109,13 @@ class SentenceStore:
             sentences.append(sentence)
             self._write(sentences)
 
-    def withdraw(self: Self, sender: str) -> Sentence | None:
+    def withdraw(self: Self, submission_id: str, sender: str, *, privileged: bool = False) -> Sentence | None:
         with self._lock:
             sentences = self._read()
-            for index in range(len(sentences) - 1, -1, -1):
-                if sentences[index].sender == sender:
+            for index, sentence in enumerate(sentences):
+                if sentence.id == submission_id:
+                    if not privileged and sentence.sender != sender:
+                        raise PermissionError('Only the author or permission level 2 may withdraw this submission')
                     removed = sentences.pop(index)
                     self._write(sentences)
                     return removed

@@ -27,7 +27,7 @@ qq_jrrp:
 
     - **/jrrp**: Show today's luck score and a quote.
     - **/jrrp post**: Show the submission format, or click “Submit” to insert a template.
-    - **/jrrp withdraw**: Withdraw your most recent submission.
+    - **/jrrp withdraw <id>**: Withdraw a specific submission. Only its author or a user with permission level 2 or higher may do so.
     - **/jrrp help**: Show this help.
 
     The score stays fixed throughout the local day and is just for fun. While the quote pool stays unchanged, there are at most three daily quote choices.
@@ -58,15 +58,19 @@ qq_jrrp:
   withdraw_missing: |-
     # Withdrawal failed
 
-    No submission belonging to you was found.
+    The submission does not exist or has already been withdrawn.
   withdraw_success: |-
     # Quote withdrawn
 
     {quotation}
-  arguments_invalid: |-
-    # Invalid arguments
+  withdraw_usage: |-
+    # Withdraw a submission
 
-    Please use /jrrp help.
+    Click “Withdraw” in the successful submission message, or send /jrrp withdraw <id>.
+  withdraw_denied: |-
+    # Withdrawal denied
+
+    Only the author or a user with permission level 2 or higher may withdraw this submission.
   storage_error: |-
     # Quote storage failed
 

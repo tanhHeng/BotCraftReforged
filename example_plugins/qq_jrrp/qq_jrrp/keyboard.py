@@ -13,19 +13,18 @@ from botcraft.api.types import QQPluginServerInterface
 from .messages import COMMAND, submission_template
 
 
-def command_keyboard(server: QQPluginServerInterface, user_id: str, *, is_c2c: bool) -> QKeyboardCustom:
-    # Keyboard fields require strings, so resolve them in the sending context.
+def command_keyboard(server: QQPluginServerInterface, *, is_c2c: bool,
+                     submission_id: str | None = None) -> QKeyboardCustom:
+    # Only successful submissions have a withdrawal target; authorization belongs to the handler.
+    commands = [
+        ('fortune', COMMAND, is_c2c),
+        ('submit', submission_template(server), False),
+        ('help', f'{COMMAND} help', is_c2c),
+    ]
+    if submission_id is not None:
+        commands.append(('withdraw', f'{COMMAND} withdraw {submission_id}', False))
     buttons = []
-    for button_id, command, auto_send, owner_only in (
-        ('fortune', COMMAND, is_c2c, False),
-        ('help', f'{COMMAND} help', is_c2c, False),
-        ('submit', submission_template(server), False, False),
-        ('withdraw', f'{COMMAND} withdraw', False, True),
-    ):
-        permission = (
-            QKeyboardPermission(QKeyboardPermissionType.SPECIFY, [user_id])
-            if owner_only else QKeyboardPermission(QKeyboardPermissionType.ALL)
-        )
+    for button_id, command, auto_send in commands:
         buttons.append(QKeyboardButton(
             id=button_id,
             render_data=QKeyboardRenderData(
@@ -33,8 +32,9 @@ def command_keyboard(server: QQPluginServerInterface, user_id: str, *, is_c2c: b
                 style=1 if button_id == 'fortune' else 0,
             ),
             action=QKeyboardActionCommand(
-                data=command, permission=permission, enter=auto_send, reply=False,
+                data=command, permission=QKeyboardPermission(QKeyboardPermissionType.ALL),
+                enter=auto_send, reply=False,
                 unsupport_tips=server.tr('qq_jrrp.buttons.unsupported'),
             ),
         ))
-    return QKeyboardCustom([buttons[:2], buttons[2:]])
+    return QKeyboardCustom([buttons[:2], buttons[2:]] if submission_id is not None else [buttons])
