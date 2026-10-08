@@ -65,7 +65,7 @@ def post_handler(server: QQPluginServerInterface, store: SentenceStore, source: 
             if payload is None:
                 response = submission_markdown(server)
             else:
-                sender = f"{server.get_botcraft_config()['appid']}:{source.scene}:{source.user.id}"
+                sender = source.user.require_identity()
                 sentence = parse_submission(payload, sender)
                 if sentence is None:
                     response = _rtr(server, 'post_invalid', markdown=True, instructions=submission_markdown(server))
@@ -81,7 +81,7 @@ def post_handler(server: QQPluginServerInterface, store: SentenceStore, source: 
 def withdraw_handler(server: QQPluginServerInterface, store: SentenceStore, source: QQCommandSource) -> None:
     with source.preferred_language_context():
         try:
-            sender = f"{server.get_botcraft_config()['appid']}:{source.scene}:{source.user.id}"
+            sender = source.user.require_identity()
             sentence = store.withdraw(sender)
             response = (
                 _rtr(server, 'withdraw_missing', markdown=True) if sentence is None

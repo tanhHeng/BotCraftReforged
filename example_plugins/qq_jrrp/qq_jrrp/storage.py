@@ -39,7 +39,12 @@ class Sentence:
     def from_record(cls: type[Self], record: object) -> Self:
         if not isinstance(record, dict) or not {'sender', 'sentence', 'from'} <= record.keys():
             raise ValueError('Sentence record requires sender, sentence and from fields')
-        return cls(record['sender'], record['sentence'], record['from'],
+        sender = record['sender']
+        if isinstance(sender, str):
+            parts = sender.split(':', 2)
+            if len(parts) == 3 and parts[0] and parts[1] in ('group', 'c2c') and parts[2]:
+                sender = parts[2]
+        return cls(sender, record['sentence'], record['from'],
                    record['id'] if 'id' in record else str(uuid4()))
 
     def to_record(self: Self) -> dict[str, str | int]:
@@ -65,7 +70,8 @@ class SentenceStore:
         if len({sentence.id for sentence in sentences}) != len(sentences):
             raise ValueError('Sentence ids must be unique')
         # Validate the entire pool before atomically migrating any legacy records.
-        if any('id' not in record for record in records):
+        if any('id' not in record or record['sender'] != sentence.sender
+               for record, sentence in zip(records, sentences)):
             self._write(sentences)
         return sentences
 
