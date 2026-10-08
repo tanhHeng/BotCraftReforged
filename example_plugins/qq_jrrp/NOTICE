@@ -21,6 +21,8 @@ instead of the direct panels HTTP implementation. Language files now use the
 native root lang/ convention for automatic directory and packed-plugin loading;
 message templates and nested Markdown translations are evaluated on sending.
 
+2026-10-08 modifications: persistent submission UUIDs with atomic legacy migration.
+
 This plugin is distributed under GNU GPL version 3 only, without any
 warranty. See LICENSE for the complete license text, obtained verbatim
 from https://www.gnu.org/licenses/gpl-3.0.txt.

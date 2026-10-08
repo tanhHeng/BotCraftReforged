@@ -7,12 +7,13 @@ Modified 2026-10-05: stdlib validation and synchronous BotCraft command I/O.
 import json
 import os
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from threading import Lock
 from typing_extensions import Self
+from uuid import UUID, uuid4
 
 from .fortune import day_seed
 
@@ -22,6 +23,7 @@ class Sentence:
     sender: str | int
     sentence: str
     source: str
+    id: str = field(default_factory=lambda: str(uuid4()))
 
     def __post_init__(self: Self) -> None:
         if type(self.sender) not in (str, int):
@@ -30,15 +32,18 @@ class Sentence:
             raise ValueError('Sentence text must be a non-empty string')
         if not isinstance(self.source, str) or not self.source:
             raise ValueError('Sentence source must be a non-empty string')
+        if not isinstance(self.id, str) or str(UUID(self.id)) != self.id:
+            raise ValueError('Sentence id must be a canonical UUID')
 
     @classmethod
     def from_record(cls: type[Self], record: object) -> Self:
         if not isinstance(record, dict) or not {'sender', 'sentence', 'from'} <= record.keys():
             raise ValueError('Sentence record requires sender, sentence and from fields')
-        return cls(record['sender'], record['sentence'], record['from'])
+        return cls(record['sender'], record['sentence'], record['from'],
+                   record['id'] if 'id' in record else str(uuid4()))
 
     def to_record(self: Self) -> dict[str, str | int]:
-        return {'sender': self.sender, 'sentence': self.sentence, 'from': self.source}
+        return {'id': self.id, 'sender': self.sender, 'sentence': self.sentence, 'from': self.source}
 
 
 class SentenceStore:
@@ -56,7 +61,13 @@ class SentenceStore:
         records = json.loads(content)
         if not isinstance(records, list):
             raise ValueError('Sentence file must contain a JSON list')
-        return [Sentence.from_record(record) for record in records]
+        sentences = [Sentence.from_record(record) for record in records]
+        if len({sentence.id for sentence in sentences}) != len(sentences):
+            raise ValueError('Sentence ids must be unique')
+        # Validate the entire pool before atomically migrating any legacy records.
+        if any('id' not in record for record in records):
+            self._write(sentences)
+        return sentences
 
     def _write(self: Self, sentences: list[Sentence]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
