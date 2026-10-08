@@ -60,11 +60,11 @@ class EventDispatcher:
         author = data.get('author')
         identity = author.get('id') if isinstance(author, dict) else None
         scene = 'C2C' if event.event_type == 'C2C_MESSAGE_CREATE' else 'Group'
-        if isinstance(identity, str) and identity:
-            identity = identity[:6] + '...'
-        else:
-            identity = '-'
-        self.runtime.logger.info('[%s] [USER-ID:%s] %s', scene,
+        conversation = (author.get('user_openid') if isinstance(author, dict) else None) if scene == 'C2C' else data.get('group_openid')
+        identity = identity[:6] if isinstance(identity, str) and identity else '-'
+        conversation = conversation[:6] if isinstance(conversation, str) and conversation else '-'
+        self.runtime.logger.info('[%s:%s] [User:%s] %s', scene,
+                                 conversation.translate(_LOG_CONTROL_CHARACTERS),
                                  identity.translate(_LOG_CONTROL_CHARACTERS),
                                  ('|'.join(parts) if parts else '[empty]').translate(_LOG_CONTROL_CHARACTERS))
 

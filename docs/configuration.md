@@ -38,7 +38,7 @@ botcraft start --config settings/config.yml --permission settings/permissions.ym
 | `appid` / `secret` | 空；QQ 开放平台凭据。修改需要新进程启动。 |
 | `language` | `zh_cn`；默认语言，可用 `en_us`。用户可以单独设置语言。 |
 | `plugin_directories` | `[plugins]`；插件搜索目录，相对路径基于实例工作目录。 |
-| `log_received_messages` | `true`；记录群聊/C2C 收件正文和缩写用户 ID，可 reload。 |
+| `log_received_messages` | `true`；记录群聊/C2C 收件正文、会话与用户 ID 前六位，可 reload。 |
 | `gateway.intents` | `[GROUP_AND_C2C_EVENT, INTERACTION]`；可增加 `MESSAGE_AUDIT`。 |
 | `http.timeout` | `10.0` 秒；必须是有限正数。 |
 | `permission.mode` | `mixed`；也支持 `native`、`role`，见[权限说明](plugin-development.md#权限与语言)。 |
@@ -77,11 +77,11 @@ botcraft reformat-config -i config.yml -o formatted/config.yml
 `log_received_messages: true` 的消息部分示例：
 
 ```text
-[Group] [USER-ID:896C5A...] Hello world
-[C2C] [USER-ID:896C5A...] Hello|Markdown text|[attachments] {"url":"https://example.org/file"}
+[Group:ABCDEF] [User:896C5A] Hello world
+[C2C:UVWXYZ] [User:896C5A] Hello|Markdown text|[attachments] {"url":"https://example.org/file"}
 ```
 
-只拼接实际存在的正文；附件、ARK、嵌套消息元素以带字段名的 JSON 展示。记录发生在命令与插件回调之前；群 AT 消息仅去掉前导 ASCII 空格，其他消息保留原正文。正常收件日志不显示消息 ID；真实 `User.id` 只显示前六位与 `...`，缺少身份时显示 `-`，不会使用 OpenID 冒充用户 ID。换行和控制字符转义为单行，凭据仍脱敏。
+只拼接实际存在的正文；附件、ARK、嵌套消息元素以带字段名的 JSON 展示。记录发生在命令与插件回调之前；群 AT 消息仅去掉前导 ASCII 空格，其他消息保留原正文。正常收件日志不显示消息 ID；群会话取原始 `group_openid`、C2C 会话取原始 `author.user_openid`，用户身份取原始 `author.id`，各仅显示前六位，不加省略号。缺少字段时显示 `-`，不会以路由 OpenID 冒充用户身份。换行和控制字符转义为单行，凭据仍脱敏。
 
 设置 `log_received_messages: false`，然后在运维控制台执行 `/botcraft reload config`，可以关闭正常收件记录，不影响消息处理、异常报告或网关阶段日志。网关日志记录连接地址已取得、连接完成、READY、停止及必要的重连/失败；不逐条打印心跳、Token、Secret、完整网关地址或会话 ID。
 
